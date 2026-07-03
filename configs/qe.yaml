@@ -1,0 +1,8 @@
+qe:
+  selection:
+    backend: comet
+    model: Unbabel/wmt22-cometkiwi-da
+    requires_reference: false
+    python_env_var: COMET_PYTHON
+    batch_size: 512
+  allow_fallback: false

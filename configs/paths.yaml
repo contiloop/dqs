@@ -1,0 +1,8 @@
+paths:
+  artifact_root: artifacts/runs/${run.id}
+  cache_dir: artifacts/cache
+  prepared_data_dir: artifacts/prepared
+  checkpoint_dir: ${paths.artifact_root}/checkpoints
+  subset_dir: ${paths.artifact_root}/subsets
+  config_snapshot_path: ${paths.artifact_root}/effective_config.yaml
+  config_hash_path: ${paths.artifact_root}/config_hash.txt

@@ -1,0 +1,323 @@
+SHELL := /bin/sh
+PYTHON_VERSION ?= 3.11
+PYTHON ?= python$(PYTHON_VERSION)
+VENV_DIR ?= .venv
+VENV_PYTHON := $(VENV_DIR)/bin/python
+PYTHON_TAG := cp$(subst .,,$(PYTHON_VERSION))
+USE_VENV ?= 0
+PY := $(if $(filter 1,$(USE_VENV)),$(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),$(PYTHON)),$(PYTHON))
+REAL_ENV_PY := $(if $(filter 1,$(USE_VENV)),$(VENV_PYTHON),$(PYTHON))
+SETUP_PY := $(if $(filter 1,$(USE_VENV)),$(VENV_PYTHON),$(PYTHON))
+QE_VENV_DIR ?= $(HOME)/.venvs/comet
+COMET_PYTHON ?= $(QE_VENV_DIR)/bin/python
+METRICX_PYTHON ?= python
+SKIP_CAUSAL_CONV1D ?= 0
+DATA_CONFIG ?= configs/data.yaml
+HF_DATASET_REPO ?=
+HF_DATASET_REVISION ?=
+HF_DATASET_LOCAL_DIR ?=
+HF_DOWNLOAD_WORKERS ?=
+HF_DOWNLOAD_DRY_RUN ?= 0
+PREPROCESS_WORKERS ?=
+PREPROCESS_TOKENIZER_MODEL ?=
+PREPROCESS_OUTPUT_DIR ?=
+PREPROCESS_LIMIT ?=
+TRAIN_CONFIG ?= configs/config.yaml
+TRAIN_SUBSET_IDX ?=
+TRAIN_SUBSET_SIZE ?=
+TRAIN_DATA_PATH ?=
+TRAIN_START_FROM ?=
+TRAIN_RESUME ?= auto
+TRAIN_DRY_RUN ?= 0
+TRAIN_FORCE ?= 0
+TRAIN_OVERRIDES ?=
+TRAIN_STAGE_END_SUBSET ?=
+TRAIN_STAGE_MAX_SUBSETS ?=
+EVAL_CONFIG ?= configs/config.yaml
+EVAL_PROFILE ?= train
+EVAL_DATA_PATH ?=
+EVAL_MODEL_PATH ?=
+EVAL_OUTPUT_DIR ?=
+EVAL_LIMIT ?=
+EVAL_DRY_RUN ?= 0
+EVAL_FORCE ?= 0
+EVAL_EVERY_N_SUBSETS ?= 0
+EVAL_ON_FINAL_SUBSET ?= 1
+EVAL_OVERRIDES ?=
+SFT_CONFIG ?= configs/config.yaml
+SFT_SUBSET_IDX ?=
+SFT_DATASET_PATH ?=
+SFT_OUTPUT_DIR ?=
+SFT_DRY_RUN ?= 0
+SFT_NPROC_PER_NODE ?= 1
+SFT_OVERRIDES ?=
+TORCH_INDEX_URL ?= https://download.pytorch.org/whl/cu128
+PIN_TORCH_VERSION ?= 2.10.0
+PIN_TORCHVISION_VERSION ?= 0.25.0
+PIN_TORCHAUDIO_VERSION ?= 2.10.0
+PIN_TRANSFORMERS_VERSION ?= 5.5.0
+PIN_TRL_VERSION ?= 0.24.0
+PIN_DATASETS_VERSION ?= 3.4.1
+PIN_UNSLOTH_VERSION ?= 2026.5.2
+PIN_UNSLOTH_ZOO_VERSION ?= 2026.5.1
+PIN_VLLM_VERSION ?= 0.19.1
+PIN_HF_HUB_VERSION ?= 1.14.0
+PIN_HF_XET_VERSION ?= 1.5.0
+PIN_FLASH_ATTN_VERSION ?= 2.8.3
+PIN_SETUPTOOLS_SPEC ?= "setuptools>=77.0.3,<81.0.0"
+# Keep numpy below 2.3 for numba compatibility while satisfying mistral-common.
+PIN_NUMPY_VERSION ?= 2.2.6
+# Keep FLA aligned with torch 2.10 runtime and avoid transitive resolver drift.
+PIN_FLA_CORE_VERSION ?= 0.4.2
+PIN_FLASH_LINEAR_ATTENTION_VERSION ?= 0.4.2
+
+# FlashAttention2 wheel hosted in a HF dataset.
+# - FLASH_ATTN_GPU_ARCH: auto | sm80 | sm120 | default
+# - FLASH_ATTN_WHL_SM80 / FLASH_ATTN_WHL_SM120: arch-specific wheel names
+# - FLASH_ATTN_WHL: fallback/default wheel name
+FLASH_ATTN_REPO ?= alwaysgood/scp-stage4-wheels
+FLASH_ATTN_WHL ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
+FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
+FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
+FLASH_ATTN_GPU_ARCH ?= auto
+
+.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval sft verify-cuda-kernels
+
+# Target: set
+# required config keys: none
+# input artifacts: none
+# output artifacts: local directories and selected python environments
+# runtime: local/remote machine setup step; downloads packages and may require CUDA-compatible wheels
+# exit behavior: 0 on successful dependency install; non-zero on package resolver/install failure
+set:
+	@mkdir -p artifacts/runs tests/fixtures src
+	@if [ "$(USE_VENV)" = "1" ] && [ ! -x "$(VENV_PYTHON)" ]; then \
+		if command -v uv >/dev/null 2>&1; then \
+			uv venv --python $(PYTHON_VERSION) --seed $(VENV_DIR); \
+		else \
+			$(PYTHON) -m venv $(VENV_DIR); \
+		fi; \
+	fi
+	@if ! $(SETUP_PY) -c 'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec("pytest") else 1)'; then \
+		$(SETUP_PY) -m pip install --upgrade pip pytest; \
+	fi
+	@$(SETUP_PY) -c 'import sys; print("set:", sys.executable, sys.version.split()[0])'
+	@if [ "$(USE_VENV)" = "1" ] && [ ! -x "$(VENV_PYTHON)" ]; then \
+		if command -v uv >/dev/null 2>&1; then \
+			uv venv --python $(PYTHON_VERSION) --seed $(VENV_DIR); \
+		else \
+			$(PYTHON) -m venv $(VENV_DIR); \
+		fi; \
+	fi
+	@$(REAL_ENV_PY) -c 'import sys; want=tuple(map(int, "$(PYTHON_VERSION)".split(".")[:2])); print("set-real-env: python", sys.version.split()[0]); sys.exit(f"set-real-env requires Python {want[0]}.{want[1]}, got {sys.version.split()[0]}") if sys.version_info[:2] != want else sys.exit(0)'
+	@$(REAL_ENV_PY) -m pip install --upgrade pip
+	@$(REAL_ENV_PY) -m pip install $(PIN_SETUPTOOLS_SPEC)
+	@$(REAL_ENV_PY) -m pip install \
+		--index-url $(TORCH_INDEX_URL) \
+		"torch==$(PIN_TORCH_VERSION)" \
+		"torchvision==$(PIN_TORCHVISION_VERSION)" \
+		"torchaudio==$(PIN_TORCHAUDIO_VERSION)"
+	@$(REAL_ENV_PY) -m pip install \
+		"trl==$(PIN_TRL_VERSION)" \
+		"datasets==$(PIN_DATASETS_VERSION)"
+	@$(REAL_ENV_PY) -m pip install \
+		"unsloth-zoo==$(PIN_UNSLOTH_ZOO_VERSION)" \
+		"unsloth==$(PIN_UNSLOTH_VERSION)"
+	@$(REAL_ENV_PY) -m pip uninstall -y vllm || true
+	@$(REAL_ENV_PY) -m pip install \
+		"vllm==$(PIN_VLLM_VERSION)" \
+		--extra-index-url $(TORCH_INDEX_URL)
+	@$(REAL_ENV_PY) -m pip install --index-url $(TORCH_INDEX_URL) "xformers==0.0.34"
+	@$(REAL_ENV_PY) -m pip install \
+		tokenizers hydra-core omegaconf \
+		openai anthropic pydantic requests peft wandb sacrebleu \
+		sentencepiece bitsandbytes hf_transfer msgspec tyro torchao ninja
+	# Intentionally pin transformers 5.5.0 for Qwen3.5 architecture support
+	# parity with the previous scp_stage4_sft runtime stack.
+	@$(REAL_ENV_PY) -m pip install --no-deps \
+		"transformers==$(PIN_TRANSFORMERS_VERSION)" \
+		"huggingface_hub>=$(PIN_HF_HUB_VERSION),<2" \
+		"hf-xet>=$(PIN_HF_XET_VERSION),<2"
+	@$(REAL_ENV_PY) -m pip install --upgrade "numpy==$(PIN_NUMPY_VERSION)"
+	# FlashAttention2: choose wheel by GPU arch (sm80/sm120) when possible.
+	@arch_choice="$(FLASH_ATTN_GPU_ARCH)"; \
+	selected_whl="$(FLASH_ATTN_WHL)"; \
+	py_tag="$(PYTHON_TAG)"; \
+	py_ver="$$( $(REAL_ENV_PY) -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' )"; \
+	if [ "$$arch_choice" = "auto" ]; then \
+		detected="$$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | awk -F'.' 'BEGIN{max=0} {gsub(/[^0-9.]/,""); if ($$1 ~ /^[0-9]+$$/) {minor=$$2; if (minor !~ /^[0-9]+$$/) minor=0; val=($$1*10)+minor; if (val>max) max=val;}} END{if (max>0) printf "sm%d", max;}')"; \
+		if [ -n "$$detected" ]; then arch_choice="$$detected"; else arch_choice="default"; fi; \
+	fi; \
+	case "$$arch_choice" in \
+		sm80) selected_whl="$(FLASH_ATTN_WHL_SM80)" ;; \
+		sm120) selected_whl="$(FLASH_ATTN_WHL_SM120)" ;; \
+		default|'') selected_whl="$(FLASH_ATTN_WHL)" ;; \
+		*) echo "  [WARN] unknown FLASH_ATTN_GPU_ARCH=$$arch_choice, using default wheel"; selected_whl="$(FLASH_ATTN_WHL)" ;; \
+	esac; \
+	echo "  flash_attn target: python=$$py_ver ($$py_tag) arch=$$arch_choice wheel=$$selected_whl"; \
+	if $(REAL_ENV_PY) -m pip install \
+		"https://huggingface.co/datasets/$(FLASH_ATTN_REPO)/resolve/main/$$selected_whl"; then \
+		echo "  flash_attn wheel install ok: $$selected_whl"; \
+	else \
+		echo "  [ERROR] flash_attn wheel unavailable: $$selected_whl"; \
+		exit 1; \
+	fi
+	@if [ "$(SKIP_CAUSAL_CONV1D)" = "1" ]; then \
+		echo "  skip causal_conv1d setup (SKIP_CAUSAL_CONV1D=1)"; \
+	else \
+		PYTHON=$(REAL_ENV_PY) bash scripts/ensure_causal_conv1d.sh; \
+	fi
+	@$(REAL_ENV_PY) -c "from fla.ops.gated_delta_rule import chunk_gated_delta_rule" 2>/dev/null \
+		|| $(REAL_ENV_PY) -m pip install --no-deps \
+			"fla-core==$(PIN_FLA_CORE_VERSION)" \
+			"flash-linear-attention==$(PIN_FLASH_LINEAR_ATTENTION_VERSION)"
+	@$(REAL_ENV_PY) -m pip install --upgrade "numpy==$(PIN_NUMPY_VERSION)"
+	@$(MAKE) verify-cuda-kernels REAL_ENV_PY=$(REAL_ENV_PY) SKIP_CAUSAL_CONV1D=$(SKIP_CAUSAL_CONV1D)
+	@$(REAL_ENV_PY) -c 'import sys, torch; print("set-real-env:", sys.executable, "torch", torch.__version__)'
+	@echo "set-real-env: setting up QE isolation venv at $(QE_VENV_DIR)..."
+	@if [ ! -x "$(QE_VENV_DIR)/bin/python" ]; then \
+		if command -v uv >/dev/null 2>&1; then \
+			uv venv --python $(PYTHON_VERSION) --seed $(QE_VENV_DIR); \
+		else \
+			$(PYTHON) -m venv --without-pip $(QE_VENV_DIR) && \
+			curl -sS https://bootstrap.pypa.io/get-pip.py | $(QE_VENV_DIR)/bin/python; \
+		fi; \
+	fi
+	@$(QE_VENV_DIR)/bin/python -m pip install --upgrade pip setuptools wheel
+	@$(QE_VENV_DIR)/bin/pip install \
+		torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+	@$(QE_VENV_DIR)/bin/pip install --no-deps transformers
+	@$(QE_VENV_DIR)/bin/pip install \
+		sentencepiece safetensors accelerate huggingface_hub \
+		"unbabel-comet>=2.2.7" sacrebleu
+	@$(QE_VENV_DIR)/bin/python -c 'import torch; print("set-real-env: QE venv torch", torch.__version__, "cuda", torch.cuda.is_available())'
+	@echo "set-real-env: COMET_PYTHON=$(COMET_PYTHON)"
+
+# Target: verify-cuda-kernels
+# required config keys: none
+# input artifacts: installed runtime python packages in REAL_ENV_PY
+# output artifacts: stdout kernel readiness status
+# runtime: local/remote GPU runtime check
+# exit behavior: 0 if kernel checks pass (or skip flag enabled); non-zero on kernel check failure
+verify-cuda-kernels:
+	@if [ "$(SKIP_CAUSAL_CONV1D)" = "1" ]; then \
+		echo "  skip CUDA kernel verification (SKIP_CAUSAL_CONV1D=1)"; \
+	else \
+		PYTHON=$(REAL_ENV_PY) bash scripts/verify_cuda_kernels.sh; \
+	fi
+
+validate-setup:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	"$$py" scripts/validate_setup.py
+
+download-prepared-data:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	"$$py" scripts/download_prepared_data.py \
+		--config "$(DATA_CONFIG)" \
+		$(if $(HF_DATASET_REPO),--repo "$(HF_DATASET_REPO)",) \
+		$(if $(HF_DATASET_REVISION),--revision "$(HF_DATASET_REVISION)",) \
+		$(if $(HF_DATASET_LOCAL_DIR),--local-dir "$(HF_DATASET_LOCAL_DIR)",) \
+		$(if $(HF_DOWNLOAD_WORKERS),--workers "$(HF_DOWNLOAD_WORKERS)",) \
+		$(if $(filter 1,$(HF_DOWNLOAD_DRY_RUN)),--dry-run,)
+
+preprocess-raw:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/preprocess_raw.py \
+		--config "$(DATA_CONFIG)" \
+		$(if $(PREPROCESS_WORKERS),--workers "$(PREPROCESS_WORKERS)",) \
+		$(if $(PREPROCESS_TOKENIZER_MODEL),--tokenizer-model "$(PREPROCESS_TOKENIZER_MODEL)",) \
+		$(if $(PREPROCESS_OUTPUT_DIR),--output-dir "$(PREPROCESS_OUTPUT_DIR)",) \
+		$(if $(PREPROCESS_LIMIT),--limit "$(PREPROCESS_LIMIT)",)
+
+train:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/train.py \
+		--config "$(TRAIN_CONFIG)" \
+		$(if $(TRAIN_SUBSET_IDX),--subset-idx "$(TRAIN_SUBSET_IDX)",) \
+		$(if $(TRAIN_SUBSET_SIZE),--subset-size "$(TRAIN_SUBSET_SIZE)",) \
+		$(if $(TRAIN_DATA_PATH),--data-path "$(TRAIN_DATA_PATH)",) \
+		$(if $(TRAIN_START_FROM),--start-from-phase "$(TRAIN_START_FROM)",) \
+		--resume "$(TRAIN_RESUME)" \
+		$(foreach override,$(TRAIN_OVERRIDES),--override "$(override)") \
+		$(if $(filter 1,$(TRAIN_DRY_RUN)),--dry-run,) \
+		$(if $(filter 1,$(TRAIN_FORCE)),--force,)
+
+train-stage:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" "$$py" src/train_stage.py \
+		--config "$(TRAIN_CONFIG)" \
+		$(if $(TRAIN_SUBSET_IDX),--subset-idx "$(TRAIN_SUBSET_IDX)",) \
+		$(if $(TRAIN_SUBSET_SIZE),--subset-size "$(TRAIN_SUBSET_SIZE)",) \
+		$(if $(TRAIN_DATA_PATH),--data-path "$(TRAIN_DATA_PATH)",) \
+		$(if $(TRAIN_START_FROM),--start-from-phase "$(TRAIN_START_FROM)",) \
+		--resume "$(TRAIN_RESUME)" \
+		$(if $(TRAIN_STAGE_END_SUBSET),--stage-end-subset "$(TRAIN_STAGE_END_SUBSET)",) \
+		$(if $(TRAIN_STAGE_MAX_SUBSETS),--stage-max-subsets "$(TRAIN_STAGE_MAX_SUBSETS)",) \
+		--eval-every-n-subsets "$(EVAL_EVERY_N_SUBSETS)" \
+		--eval-config "$(EVAL_CONFIG)" \
+		--eval-profile "$(EVAL_PROFILE)" \
+		$(if $(EVAL_DATA_PATH),--eval-data-path "$(EVAL_DATA_PATH)",) \
+		$(if $(EVAL_MODEL_PATH),--eval-model-path "$(EVAL_MODEL_PATH)",) \
+		$(if $(EVAL_OUTPUT_DIR),--eval-output-dir "$(EVAL_OUTPUT_DIR)",) \
+		$(if $(EVAL_LIMIT),--eval-limit "$(EVAL_LIMIT)",) \
+		$(foreach override,$(TRAIN_OVERRIDES),--override "$(override)") \
+		$(foreach override,$(EVAL_OVERRIDES),--eval-override "$(override)") \
+		$(if $(filter 1,$(TRAIN_DRY_RUN)),--dry-run,) \
+		$(if $(filter 1,$(TRAIN_FORCE)),--force,) \
+		$(if $(filter 1,$(EVAL_DRY_RUN)),--eval-dry-run,) \
+		$(if $(filter 1,$(EVAL_FORCE)),--eval-force,) \
+		$(if $(filter 1,$(EVAL_ON_FINAL_SUBSET)),--eval-on-final-subset,)
+
+eval:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" "$$py" src/eval.py \
+		--config "$(EVAL_CONFIG)" \
+		--override "eval=$(EVAL_PROFILE)" \
+		$(if $(EVAL_DATA_PATH),--data-path "$(EVAL_DATA_PATH)",) \
+		$(if $(EVAL_MODEL_PATH),--model-path "$(EVAL_MODEL_PATH)",) \
+		$(if $(EVAL_OUTPUT_DIR),--output-dir "$(EVAL_OUTPUT_DIR)",) \
+		$(if $(EVAL_LIMIT),--limit "$(EVAL_LIMIT)",) \
+		$(foreach override,$(EVAL_OVERRIDES),--override "$(override)") \
+		$(if $(filter 1,$(EVAL_DRY_RUN)),--dry-run,) \
+		$(if $(filter 1,$(EVAL_FORCE)),--force,)
+
+sft:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	if [ "$(SFT_NPROC_PER_NODE)" != "1" ]; then \
+		PYTHONPATH=src "$$py" -m torch.distributed.run --standalone --nproc_per_node "$(SFT_NPROC_PER_NODE)" src/sft_train.py \
+			--config "$(SFT_CONFIG)" \
+			$(if $(SFT_SUBSET_IDX),--subset-idx "$(SFT_SUBSET_IDX)",) \
+			$(if $(SFT_DATASET_PATH),--dataset-path "$(SFT_DATASET_PATH)",) \
+			$(if $(SFT_OUTPUT_DIR),--output-dir "$(SFT_OUTPUT_DIR)",) \
+			$(foreach override,$(SFT_OVERRIDES),--override "$(override)") \
+			$(if $(filter 1,$(SFT_DRY_RUN)),--dry-run,); \
+	else \
+		PYTHONPATH=src "$$py" src/sft_train.py \
+			--config "$(SFT_CONFIG)" \
+			$(if $(SFT_SUBSET_IDX),--subset-idx "$(SFT_SUBSET_IDX)",) \
+			$(if $(SFT_DATASET_PATH),--dataset-path "$(SFT_DATASET_PATH)",) \
+			$(if $(SFT_OUTPUT_DIR),--output-dir "$(SFT_OUTPUT_DIR)",) \
+			$(foreach override,$(SFT_OVERRIDES),--override "$(override)") \
+			$(if $(filter 1,$(SFT_DRY_RUN)),--dry-run,); \
+	fi

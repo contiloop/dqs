@@ -1,0 +1,8 @@
+run:
+  seed: 42
+  student_filter_tag: sf_${onoff:${data.degeneration_filter.student_enabled}}
+  id: ${model.family}_${model.size}_${model.variant}_${training.tuning_mode}_${run.student_filter_tag}_seed${run.seed}
+  profile: real
+  subset_start: 0
+  subset_end: null
+  hydra_chdir: false

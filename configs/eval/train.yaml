@@ -1,0 +1,33 @@
+eval:
+  profile: train
+  dataset_path: data/test.jsonl
+  output_dir: ${paths.artifact_root}/eval/${eval.profile}
+  source_field: ${data.source_field}
+  target_field: ${data.target_field}
+  metadata_field: ${data.metadata_field}
+  limit: null
+  generation:
+    model_path: auto
+    max_new_tokens: ${inference.max_new_tokens}
+    temperature: 0.0
+    top_p: 1.0
+    num_gpus: 1
+    tensor_parallel_size: 1
+    gpu_memory_utilization: ${inference.gpu_memory_utilization}
+  filter:
+    enabled: true
+  metrics:
+    - id: bleu
+      backend: sacrebleu
+      metric: bleu
+      requires_reference: true
+    - id: chrf
+      backend: sacrebleu
+      metric: chrf
+      requires_reference: true
+    - id: comet_wmt22_da
+      backend: comet
+      model: Unbabel/wmt22-comet-da
+      requires_reference: true
+      python_env_var: COMET_PYTHON
+      batch_size: 512

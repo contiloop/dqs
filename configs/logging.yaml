@@ -1,0 +1,16 @@
+logging:
+  local:
+    enabled: true
+    root_dir: ${paths.artifact_root}/logs
+  wandb:
+    enabled: true
+    project: dqs
+    entity: null
+    run_name: ${run.id}
+    tags:
+      - dqs
+      - qwen3.5
+      - en-ko
+  save_effective_config: true
+  save_template_versions: true
+  save_all_step_artifacts: true

@@ -1,0 +1,16 @@
+prompts:
+  template_seed: 42
+  student_templates_path: prompts/student_templates.yaml
+  teacher_template_path: prompts/teacher_template.txt
+  student_selection:
+    random_template: true
+    deterministic_by_sample_id: true
+    use_language_variants: true
+  sft_training:
+    random_template: true
+    deterministic_by_sample_id: true
+    use_language_variants: true
+  evaluation:
+    random_template: false
+    base_template_id: base_label_en_001
+    instruct_template_id: instruct_ko_professional_001

@@ -1,0 +1,163 @@
+data:
+  raw_dataset_repo: alwaysgood/financial-english-source-corpus
+  prepared_dataset_repo: alwaysgood/financial-english-source-corpus-qwen35-1280
+  use_prepared_dataset: true
+  prepared_download:
+    revision: main
+    local_dir: data/prepared/financial-english-source-corpus-qwen35-1280
+    workers: 16
+    allow_patterns:
+      - "*.parquet"
+      - "*.json"
+      - "*.yaml"
+      - "*.yml"
+      - "*.txt"
+      - README.md
+  preprocess_raw:
+    split: train
+    revision: main
+    tokenizer_model: ${model.name_or_path}
+    tokenizer_revision: main
+    output_dir: data/prepared/financial-english-source-corpus-qwen35-1280-rebuilt
+    workers: 16
+    rows_per_shard: 50000
+    task_buffer_size: 256
+  source_field: source
+  target_field: target
+  metadata_field: metadata
+  max_input_tokens: 1280
+  max_output_tokens: 1500
+  length_counter: tokenizer
+  split_long_sources: false
+  subset_size: 100000
+  selection_ratio: 0.01
+  teacher_target_per_subset: 1000
+  length_bucket_selection:
+    enabled: true
+    quota_strategy: proportional
+    weights: null
+    fill_remainder_from_global: true
+    allow_zero_weight_bucket_fill: false
+  length_buckets:
+    - [1, 32]
+    - [33, 64]
+    - [65, 128]
+    - [129, 256]
+    - [257, 512]
+    - [513, 768]
+    - [769, 1024]
+    - [1025, 1280]
+  degeneration_filter:
+    enabled: true
+    student_enabled: true
+    teacher_enabled: true
+    student_require_valid_output: true
+    reject_repetition: true
+    reject_foreign_passthrough: true
+    reject_english_passthrough: true
+    reject_wrong_script_heavy: true
+    reject_wrong_script_light: true
+    reject_truncation: true
+    reject_encoding_replchar: true
+    reject_length_explosion: true
+    reject_low_hangul_other: true
+    foreign_passthrough:
+      min_text_chars: 80
+      low_hangul_ratio_max: 0.10
+      low_hangul_latin_like_ratio_min: 0.50
+      hangul_ratio_max: 0.45
+      latin_like_ratio_min: 0.30
+      source_token_overlap_min: 0.12
+    english_passthrough:
+      hangul_ratio_max: 0.05
+      latin_ratio_min: 0.50
+      source_token_overlap_min: 0.55
+      sentence_min_text_chars: 40
+      sentence_hangul_ratio_max: 0.05
+      sentence_latin_like_ratio_min: 0.35
+      sentence_source_token_overlap_min: 0.55
+    wrong_script_light:
+      min_text_chars: 30
+      wrong_script_char_count_min: 1
+      mixed_script_token_count_min: 1
+    repetition:
+      max_analysis_chars: 6000
+      max_analysis_tokens: 500
+      max_char_unit_len: 16
+      max_immediate_span_tokens: 24
+      char_repeat_run_min: 10
+      char_repeat_excess_over_source_min: 8
+      word_repeat_run_min: 8
+      word_repeat_excess_over_source_min: 5
+      immediate_span:
+        token_span_min: 2
+        repeat_run_min: 3
+        repeated_token_score_min: 8
+        excess_score_over_source_min: 6
+        long_span_token_span_min: 6
+        long_span_repeat_run_min: 2
+        long_span_repeated_token_score_min: 14
+        long_span_excess_score_over_source_min: 8
+      token_ngram:
+        n_min: 3
+        n_max: 12
+        repeat_count_min: 4
+        coverage_min: 0.18
+        repeated_token_excess_over_source_min: 8
+      short_ngram:
+        n_min: 2
+        n_max: 2
+        cheap_token_frequency_min: 8
+        repeat_count_min: 8
+        coverage_min: 0.04
+        repeated_token_excess_over_source_min: 10
+      token_frequency:
+        count_min: 30
+        ratio_min: 0.06
+        count_excess_over_source_min: 20
+      korean_function_token:
+        count_min: 15
+        ratio_min: 0.10
+      normalized_clause_duplication:
+        min_normalized_chars: 10
+        duplicate_count_min: 3
+        duplicate_ratio_min: 0.30
+        duplicate_count_excess_over_source_min: 2
+        short_duplicate_count_min: 2
+        short_duplicate_ratio_min: 0.80
+        short_duplicate_count_excess_over_source_min: 1
+        short_text_chars_max: 1000
+    truncation:
+      min_dangling_text_chars: 30
+      min_dangling_particle_text_chars: 80
+      dangling_korean_suffixes:
+        - "이었으며"
+        - "였으며"
+        - "었으며"
+        - "했으며"
+        - "되었으며"
+        - "이며"
+        - "하며"
+        - "하고"
+        - "했고"
+        - "하였고"
+        - "되었고"
+        - "하기 위해"
+        - "위해"
+        - "때문에"
+      dangling_korean_particles:
+        - "에"
+        - "의"
+        - "로"
+        - "으로"
+        - "와"
+        - "과"
+        - "은"
+        - "는"
+        - "을"
+        - "를"
+        - "이"
+        - "가"
+        - "에서"
+        - "부터"
+        - "까지"

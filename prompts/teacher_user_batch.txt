@@ -1,0 +1,6 @@
+Process each item independently.
+
+Return exactly one JSON object with an "items" array of length {batch_size}.
+Each output item id must exactly match one input item id.
+
+{items_text}

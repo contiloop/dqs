@@ -1,0 +1,149 @@
+language:
+  src:
+    code: en
+    locale: en-US
+    name_en: English
+    name_ko: 영어
+    label_en: English
+    label_ko: 영어
+  tgt:
+    code: ko
+    locale: ko-KR
+    name_en: Korean
+    name_ko: 한국어
+    label_en: Korean
+    label_ko: 한국어
+    ko_name_variants:
+      - value: 한국어
+        weight: 0.85
+      - value: 우리말
+        weight: 0.10
+      - value: 한글
+        weight: 0.05
+
+domain:
+  name_en: economic and financial
+  name_ko: 경제·금융
+
+base_templates:
+  - id: base_label_en_001
+    text: |
+      {src_label_en}:
+      {src}
+
+      {tgt_label_en}:
+
+  - id: base_label_ko_001
+    text: |
+      {src_label_ko}:
+      {src}
+
+      {tgt_label_ko}:
+
+  - id: base_task_en_001
+    text: |
+      Task: {src_lang_en}-to-{tgt_lang_en} translation
+      Source:
+      {src}
+
+      Target:
+
+  - id: base_task_ko_001
+    text: |
+      작업: {src_lang_ko}를 {tgt_lang_ko}로 번역
+      원문:
+      {src}
+
+      번역:
+
+  - id: base_econ_en_001
+    text: |
+      Task: {src_lang_en}-to-{tgt_lang_en} {domain_en} translation
+      Source:
+      {src}
+
+      Translation:
+
+  - id: base_econ_ko_001
+    text: |
+      작업: {domain_ko} 분야의 {src_lang_ko}-{tgt_lang_ko} 번역
+      원문:
+      {src}
+
+      번역:
+
+instruct_templates:
+  - id: instruct_en_direct_001
+    lang: en
+    text: |
+      Translate the following {src_lang_en} text into {tgt_lang_en}. Output only the {tgt_lang_en} translation.
+
+      {src_label_en}:
+      {src}
+
+      {tgt_label_en}:
+
+  - id: instruct_en_professional_001
+    lang: en
+    text: |
+      You are a professional {src_lang_en}-to-{tgt_lang_en} translator specializing in {domain_en} texts. Preserve the meaning, numbers, names, tickers, dates, and terminology. Output only the {tgt_lang_en} translation.
+
+      Source:
+      {src}
+
+      Translation:
+
+  - id: instruct_en_source_first_001
+    lang: en
+    text: |
+      {src}
+
+      Translate the {src_lang_en} text above into {tgt_lang_en}. Output only the translation.
+
+  - id: instruct_en_natural_001
+    lang: en
+    text: |
+      What is the natural {tgt_lang_en} translation of the following {src_lang_en} sentence? Output only the translation.
+
+      {src}
+
+  - id: instruct_ko_direct_001
+    lang: ko
+    text: |
+      다음 {src_lang_ko} 문장을 {tgt_lang_ko}로 번역하세요. 번역문만 출력하세요.
+
+      {src_label_ko}:
+      {src}
+
+      {tgt_label_ko}:
+
+  - id: instruct_ko_professional_001
+    lang: ko
+    text: |
+      당신은 {domain_ko} 분야 전문 {src_lang_ko}-{tgt_lang_ko} 번역가입니다. 의미, 숫자, 고유명사, 티커, 날짜, 전문용어를 정확히 보존해 자연스러운 {tgt_lang_ko}로 번역하세요. 설명 없이 번역문만 출력하세요.
+
+      원문:
+      {src}
+
+      번역:
+
+  - id: instruct_ko_source_first_001
+    lang: ko
+    text: |
+      {src}
+
+      위 {src_lang_ko} 문장을 자연스러운 {tgt_lang_ko}로 번역하세요. 번역문만 출력하세요.
+
+  - id: instruct_ko_report_001
+    lang: ko
+    text: |
+      다음 문장을 {domain_ko} 리포트 문체의 {tgt_lang_ko}로 번역하세요. 원문을 반복하지 말고 번역문만 출력하세요.
+
+      {src}
+
+  - id: instruct_ko_meaning_001
+    lang: ko
+    text: |
+      아래 {src_lang_ko} 문장의 의미를 {tgt_lang_ko}로 자연스럽게 옮기세요. 부연 설명 없이 번역문만 작성하세요.
+
+      {src}

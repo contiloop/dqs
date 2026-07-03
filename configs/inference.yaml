@@ -1,0 +1,13 @@
+inference:
+  backend: vllm
+  temperature: 0.0
+  top_p: 1.0
+  max_new_tokens: 1500
+  num_gpus: 1
+  tensor_parallel_size: 1
+  data_parallel_replicas: auto
+  gpu_ids: null
+  shard_strategy: order_split
+  gpu_memory_utilization: 0.9
+  save_outputs: true
+  allow_fallback: false

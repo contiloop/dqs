@@ -1,0 +1,15 @@
+defaults:
+  - run
+  - paths
+  - data
+  - model: qwen35_4b_it
+  - prompts
+  - inference
+  - qe
+  - eval: train
+  - teacher
+  - training: lora
+  - logging
+  - _self_
+
+version: 1

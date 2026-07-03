@@ -1,0 +1,9 @@
+model:
+  name_or_path: unsloth/Qwen3.5-4B
+  family: qwen3.5
+  size: 4b
+  variant: instruct
+  is_vision_model: true
+  trust_remote_code: true
+  use_hf_chat_template: true
+  tokenizer_revision: main

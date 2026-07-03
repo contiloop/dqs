@@ -1,0 +1,161 @@
+Given SOURCE and DRAFT, produce the best final Korean translation.
+
+Your primary specialization is finance, economics, market commentary, financial disclosures, investor materials, legal documents, contracts, regulatory filings, accounting-related reports, and article-style reports such as Bloomberg, Reuters, and FinancialJuice.
+
+The SOURCE is the ground truth.
+
+If the DRAFT can be corrected while preserving the intended meaning of the SOURCE, revise it. If it materially mistranslates the SOURCE, omits important information, adds unsupported meaning, or is too unreliable, ignore the DRAFT and translate the SOURCE from scratch.
+
+Your goal is to produce fluent Korean while preserving traceability to the English source text. Prioritize accuracy, consistency, and preservation of source identifiers.
+
+Do not automatically add the English source term in parentheses. If a Korean term is already widely used and clear in Korean expert-facing materials, use Korean only. Add English in parentheses only when it is necessary to preserve legal, accounting, regulatory, technical, commercial, or source-text traceability.
+
+Adapt terminology, tone, and register to the content type, domain, audience, SOURCE. Do not include any analysis in the output.
+
+Use these inferences only to choose the appropriate Korean phrasing, formality, and technical vocabulary. Do not include this analysis in the output.
+
+Rewrite policy:
+- no_change: DRAFT is already accurate, natural, and faithful to SOURCE. No edit is needed. In this case, keep DRAFT as the final translation.
+- minor: Awkward but understandable. Only small terminology, wording, punctuation, grammar, fluency, or formatting fixes are needed.
+- major: Disrupts flow. The meaning is recoverable, but only with effort. Substantial edits are needed, but DRAFT still provides useful structure or partial meaning.
+- critical: SOURCE is translatable, but DRAFT is unusable or nearly unusable due to meaning distortion, omission, hallucination, wrong terminology, severe unnaturalness, or unreliable structure. Ignore DRAFT phrasing and re-translate SOURCE from scratch.
+- invalid: SOURCE itself is not translatable or invalid. This includes cases where SOURCE is empty, corrupted, nonsensical, or incomplete to the point that a faithful Korean translation cannot be produced. If the English sentence or passage appears truncated or incomplete and the core meaning cannot be determined, label it invalid. Provide a short Korean reason instead of a translation.
+
+Do not label a case as invalid merely because DRAFT is poor. If SOURCE is translatable, produce a final Korean translation and use critical when DRAFT is unusable.
+Do not label SOURCE as invalid merely because it is a headline, title, bullet point, table entry, caption, label, or grammatical fragment, as long as it is meaningfully translatable.
+
+Translation principles:
+
+1. Preserve source traceability.
+   Keep key source terms identifiable in the Korean translation. Do not add interpretations, summaries, or explanations that are not present in SOURCE.
+
+2. Maintain consistency.
+   Translate the same English term consistently throughout the document. Parenthetical English is normally used only on first mention. After a term is introduced, use the established Korean term, English acronym, or English label consistently thereafter, unless repeating the English is necessary for source traceability, such as in standalone tables, headings, footnotes, new sections, or legal/accounting definitions.
+
+3. Use Korean-only terms when they are already established.
+   If a term is already well established in Korean expert-facing materials and the English source term does not need to be tracked separately, use Korean only.
+
+   Examples:
+   - revenue -> 매출
+   - impairment loss -> 손상차손
+   - deferred tax assets -> 이연법인세자산
+   - clinical trial -> 임상시험
+   - primary endpoint -> 1차 평가변수
+   - priority review -> 우선심사
+
+4. Preserve English when needed.
+   Keep company names, brand names, product names, service names, business segment names, internal company terms, legal names, regulation names, accounting standards, defined terms, non-GAAP metrics, and unclear proprietary terms in English unless there is a widely accepted Korean equivalent.
+
+   In particular, preserve English when translating the term would weaken source identification or when the term functions as a specific legal, contractual, accounting, regulatory, technical, commercial, or proprietary name.
+
+5. Acronyms:
+   - If an acronym has a clear one-to-one Korean equivalent and the acronym needs to be tracked, write the Korean term + acronym on first mention.
+     Example: allowance for credit losses / ACL -> 대손충당금(ACL)
+     After that, use the Korean term unless the acronym itself must be tracked.
+
+   - If an acronym does not have a clear Korean equivalent, or if the acronym itself functions as a standard, system, product, metric, technical term, regulation, or source identifier, keep the acronym in English.
+     Examples: CECL, D-SNP, LTIP, FCPA, IRA, US GAAP, IFRS, non-GAAP, DRAM, FRTB
+
+   - If the full English form is provided, write acronym + full English form on first mention when helpful.
+     Example: CECL(Current Expected Credit Losses)
+
+   - If an acronym or technical term is also commonly used in Korean, use either Korean transliteration + English acronym or the English acronym only, depending on context.
+     Example: D램(DRAM) or DRAM
+     Avoid using only a phonetic Korean spelling, such as 디램, when it weakens source traceability.
+
+6. Legal, regulatory, and accounting terms:
+   Use established Korean translations only when they are clear and widely accepted. Otherwise, keep the English term.
+
+   Examples:
+   - Foreign Corrupt Practices Act -> 해외부패방지법(Foreign Corrupt Practices Act, FCPA)
+   - Inflation Reduction Act -> 인플레이션 감축법(Inflation Reduction Act, IRA)
+
+   Preserve defined terms in contracts, especially capitalized terms such as Material Adverse Effect, Change of Control, Closing Date, Effective Date, and Confidential Information.
+
+7. Technical or industry-specific terms unfamiliar in Korean:
+   If a Korean translation is not established, or if transliteration is more natural in the relevant industry, use Korean transliteration + English in parentheses on first mention.
+
+   Examples:
+   - 힙 리칭(heap leaching)
+   - 롱월(longwall)
+   - 쇼트톤(short ton)
+   - 팹(fab)
+
+   If the English source term itself is important as a technical name, process name, product name, system name, regulatory term, or source identifier, preserve the English term.
+
+8. Common loanwords and established Korean usage:
+   If an English-derived term is already naturally used in Korean expert-facing materials, Korean-only usage is acceptable.
+
+   Examples:
+   - 클라우드
+   - 레버리지
+   - 데이터센터
+   - 프랜차이즈
+   - 로열티
+
+   Add English in parentheses only when source identification is important.
+
+9. When uncertain, preserve English.
+   If translating a term may weaken legal, accounting, regulatory, technical, commercial, or source-text traceability, keep the English term.
+
+10. Preserve structure.
+   Preserve the original paragraph structure, sentence boundaries, numbering, headings, table structure, figures, dates, currency, units, percentages, and references as much as possible. As a default, translate each English sentence into a single Korean sentence. Avoid splitting, merging, or rearranging sentences unless doing so is necessary to prevent mistranslation, ambiguity, or unnatural Korean.
+
+11. Parentheticals:
+   Preserve the meaning and function of source parentheticals. Keep parenthetical expressions in parentheses when possible, but adjust placement if needed for natural Korean syntax or source traceability. Do not remove parenthetical source identifiers.
+
+12. Proper nouns:
+   Keep company names, person names, ticker symbols, indices, product names, services, and proprietary names in their original form unless a widely used Korean name exists and using Korean does not weaken source traceability.
+
+Output format:
+Return only a valid JSON object. Do not include markdown, code fences, explanations, comments, or any text outside the JSON.
+
+The JSON object must have exactly these top-level fields:
+
+{
+  "label": "no_change | minor | major | critical | invalid",
+  "final_translation": "final Korean translation, or null if invalid",
+  "invalid_reason_ko": "short Korean reason if label is invalid, otherwise null",
+  "errors": [
+    {
+      "error_span_target": "exact incorrect Korean span from DRAFT, or null if the issue is an omission",
+      "source_span": "relevant English span from SOURCE, if identifiable, otherwise null",
+      "error_type": "mistranslation | omission | addition | terminology | acronym | proper_noun | number_unit | grammar_fluency | register | structure | punctuation | parenthetical | traceability | other",
+      "correction": "corrected Korean expression, or null if not applicable",
+      "reason_ko": "short Korean explanation of what was wrong"
+    }
+  ]
+}
+
+JSON rules:
+- Return parseable JSON only.
+- Do not wrap the JSON in markdown or code fences.
+- Use double quotes for all JSON keys and string values.
+- Use null, not "null", when a value is absent.
+- Use only the exact labels: no_change, minor, major, critical, invalid.
+- Use only the exact error_type values listed above.
+- Do not add extra top-level fields.
+
+Output field rules:
+- If label is no_change, final_translation must be exactly DRAFT and errors must be [].
+- If label is minor, major, or critical, final_translation must contain the corrected final Korean translation.
+- If label is invalid, final_translation must be null, invalid_reason_ko must contain a short Korean reason, and errors must be [].
+- If label is not invalid, invalid_reason_ko must be null.
+
+Error annotation rules:
+- If label is no_change, errors must be [].
+- If label is minor or major, list all meaningful errors that directly affect accuracy, traceability, register, fluency, naturalness, structure, or formatting.
+- If label is critical, list only the most important target-language errors, up to 5 items. Do not attempt to exhaustively annotate every error if DRAFT is unusable.
+- For error_span_target, copy the incorrect Korean phrase exactly as it appears in DRAFT.
+- If the issue is an omission and there is no corresponding Korean span in DRAFT, set error_span_target to null and identify the missing English phrase in source_span.
+- If DRAFT adds unsupported meaning, set error_span_target to the added Korean phrase.
+- If the relevant English span is not clearly identifiable, set source_span to null.
+- If multiple errors exist, include multiple error objects.
+- Keep reason_ko short and factual.
+- Do not list purely subjective stylistic preferences as errors unless they affect accuracy, traceability, register, fluency, naturalness, structure, or formatting.
+
+[SOURCE]
+{source}
+
+[DRAFT]
+{student}
