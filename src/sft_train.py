@@ -78,7 +78,7 @@ def _torch_dtype(dtype_name: Any) -> Any:
         return None
     text = str(dtype_name).strip().lower()
     if text in {"", "auto", "none", "null"}:
-        return "auto"
+        return None
     import torch
 
     if text in {"bf16", "bfloat16", "torch.bfloat16"}:
