@@ -161,6 +161,11 @@ def eval_metric_payload(summary: Mapping[str, Any], *, prefix: str) -> dict[str,
             value = metric.get("mean", metric.get("score"))
             if isinstance(value, (int, float)):
                 payload[f"{prefix}/{metric_id}"] = float(value)
+    label_counts = summary.get("filter_label_counts", {})
+    if isinstance(label_counts, Mapping):
+        for label, count in label_counts.items():
+            if isinstance(count, (int, float)):
+                payload[f"{prefix}/filter_label_counts/{label}"] = int(count)
     return payload
 
 
