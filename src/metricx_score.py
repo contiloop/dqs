@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -41,6 +42,140 @@ def _metricx_env(repo_env_var: str = "METRICX_REPO_DIR") -> dict[str, str]:
     return env
 
 
+def _metricx_runner_code() -> str:
+    return textwrap.dedent(
+        r'''
+        from __future__ import annotations
+
+        import argparse
+        import json
+        import os
+
+        import torch
+        import transformers
+        from metricx24 import models
+
+
+        def _read_jsonl(path: str) -> list[dict]:
+            rows = []
+            with open(path, "r", encoding="utf-8") as handle:
+                for raw_line in handle:
+                    if raw_line.strip():
+                        rows.append(json.loads(raw_line))
+            return rows
+
+
+        def _input_text(row: dict, *, is_qe: bool) -> str:
+            if is_qe:
+                return "source: " + row["source"] + " candidate: " + row["hypothesis"]
+            return (
+                "source: "
+                + row["source"]
+                + " candidate: "
+                + row["hypothesis"]
+                + " reference: "
+                + row["reference"]
+            )
+
+
+        def _tokenize_batch(tokenizer, texts: list[str], *, max_input_length: int, device):
+            encoded = [
+                tokenizer(
+                    text,
+                    max_length=max_input_length,
+                    truncation=True,
+                    padding=False,
+                )
+                for text in texts
+            ]
+            input_ids = []
+            attention_masks = []
+            for item in encoded:
+                ids = list(item["input_ids"])
+                mask = list(item["attention_mask"])
+                if ids:
+                    ids = ids[:-1]
+                    mask = mask[:-1]
+                if not ids:
+                    pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+                    ids = [pad_id]
+                    mask = [0]
+                input_ids.append(ids)
+                attention_masks.append(mask)
+
+            pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+            width = max(len(ids) for ids in input_ids)
+            ids_tensor = torch.full(
+                (len(input_ids), width),
+                fill_value=pad_id,
+                dtype=torch.long,
+                device=device,
+            )
+            mask_tensor = torch.zeros(
+                (len(input_ids), width),
+                dtype=torch.long,
+                device=device,
+            )
+            for row_idx, (ids, mask) in enumerate(zip(input_ids, attention_masks)):
+                length = len(ids)
+                ids_tensor[row_idx, :length] = torch.tensor(ids, dtype=torch.long, device=device)
+                mask_tensor[row_idx, :length] = torch.tensor(mask, dtype=torch.long, device=device)
+            return ids_tensor, mask_tensor
+
+
+        def main() -> None:
+            parser = argparse.ArgumentParser(description="Run DQS padded MetricX inference.")
+            parser.add_argument("--tokenizer", required=True)
+            parser.add_argument("--model_name_or_path", required=True)
+            parser.add_argument("--max_input_length", type=int, required=True)
+            parser.add_argument("--batch_size", type=int, required=True)
+            parser.add_argument("--input_file", required=True)
+            parser.add_argument("--output_file", required=True)
+            parser.add_argument("--qe", action="store_true")
+            args = parser.parse_args()
+
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer)
+            model = models.MT5ForRegression.from_pretrained(
+                args.model_name_or_path,
+                torch_dtype="auto",
+            )
+            model.to(device)
+            model.eval()
+
+            rows = _read_jsonl(args.input_file)
+            predictions = []
+            batch_size = max(1, int(args.batch_size))
+            with torch.inference_mode():
+                for start in range(0, len(rows), batch_size):
+                    chunk = rows[start : start + batch_size]
+                    texts = [_input_text(row, is_qe=args.qe) for row in chunk]
+                    input_ids, attention_mask = _tokenize_batch(
+                        tokenizer,
+                        texts,
+                        max_input_length=int(args.max_input_length),
+                        device=device,
+                    )
+                    output = model(input_ids=input_ids, attention_mask=attention_mask)
+                    batch_predictions = output.predictions.detach().float().cpu().tolist()
+                    predictions.extend(float(value) for value in batch_predictions)
+
+            dirname = os.path.dirname(args.output_file)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
+            with open(args.output_file, "w", encoding="utf-8") as handle:
+                for row, prediction in zip(rows, predictions):
+                    out = dict(row)
+                    out["prediction"] = float(prediction)
+                    handle.write(json.dumps(out, ensure_ascii=False) + "\n")
+
+
+        if __name__ == "__main__":
+            main()
+        '''
+    ).strip() + "\n"
+
+
 def metricx_scores(
     rows: list[Mapping[str, Any]],
     *,
@@ -68,11 +203,12 @@ def metricx_scores(
         tmp = Path(tmpdir)
         input_path = tmp / "input.jsonl"
         output_path = tmp / "output.jsonl"
+        runner_path = tmp / "dqs_metricx_runner.py"
         write_jsonl(input_path, payload)
+        runner_path.write_text(_metricx_runner_code(), encoding="utf-8")
         cmd = [
             metricx_python,
-            "-m",
-            module,
+            str(runner_path),
             "--tokenizer",
             tokenizer,
             "--model_name_or_path",
