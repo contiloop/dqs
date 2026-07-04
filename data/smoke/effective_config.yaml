@@ -1,0 +1,364 @@
+run:
+  seed: 42
+  student_filter_tag: sf_on
+  id: qwen3.5_4b_instruct_lora_sf_on_seed42
+  profile: real
+  subset_start: 0
+  subset_end: null
+  hydra_chdir: false
+paths:
+  artifact_root: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42
+  cache_dir: artifacts/cache
+  prepared_data_dir: artifacts/prepared
+  checkpoint_dir: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42/checkpoints
+  subset_dir: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42/subsets
+  config_snapshot_path: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42/effective_config.yaml
+  config_hash_path: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42/config_hash.txt
+data:
+  raw_dataset_repo: alwaysgood/financial-english-source-corpus
+  prepared_dataset_repo: alwaysgood/financial-english-source-corpus-qwen35-1280
+  use_prepared_dataset: true
+  prepared_download:
+    revision: main
+    local_dir: data/prepared/financial-english-source-corpus-qwen35-1280
+    workers: 16
+    allow_patterns:
+    - '*.parquet'
+    - '*.json'
+    - '*.yaml'
+    - '*.yml'
+    - '*.txt'
+    - README.md
+  preprocess_raw:
+    split: train
+    revision: main
+    tokenizer_model: unsloth/Qwen3.5-4B
+    tokenizer_revision: main
+    output_dir: data/prepared/financial-english-source-corpus-qwen35-1280-rebuilt
+    workers: 16
+    rows_per_shard: 50000
+    task_buffer_size: 256
+  source_field: source
+  target_field: target
+  metadata_field: metadata
+  max_input_tokens: 1280
+  max_output_tokens: 1500
+  length_counter: tokenizer
+  split_long_sources: false
+  subset_size: 100000
+  selection_ratio: 0.01
+  teacher_target_per_subset: 1000
+  length_bucket_selection:
+    enabled: true
+    quota_strategy: proportional
+    weights: null
+    fill_remainder_from_global: true
+    allow_zero_weight_bucket_fill: false
+  length_buckets:
+  - - 1
+    - 32
+  - - 33
+    - 64
+  - - 65
+    - 128
+  - - 129
+    - 256
+  - - 257
+    - 512
+  - - 513
+    - 768
+  - - 769
+    - 1024
+  - - 1025
+    - 1280
+  degeneration_filter:
+    enabled: true
+    student_enabled: true
+    teacher_enabled: true
+    student_require_valid_output: true
+    reject_repetition: true
+    reject_foreign_passthrough: true
+    reject_english_passthrough: true
+    reject_wrong_script_heavy: true
+    reject_wrong_script_light: true
+    reject_truncation: true
+    reject_encoding_replchar: true
+    reject_length_explosion: true
+    reject_low_hangul_other: true
+    foreign_passthrough:
+      min_text_chars: 80
+      low_hangul_ratio_max: 0.1
+      low_hangul_latin_like_ratio_min: 0.5
+      hangul_ratio_max: 0.45
+      latin_like_ratio_min: 0.3
+      source_token_overlap_min: 0.12
+    english_passthrough:
+      hangul_ratio_max: 0.05
+      latin_ratio_min: 0.5
+      source_token_overlap_min: 0.55
+      sentence_min_text_chars: 40
+      sentence_hangul_ratio_max: 0.05
+      sentence_latin_like_ratio_min: 0.35
+      sentence_source_token_overlap_min: 0.55
+    wrong_script_light:
+      min_text_chars: 30
+      wrong_script_char_count_min: 1
+      mixed_script_token_count_min: 1
+    repetition:
+      max_analysis_chars: 6000
+      max_analysis_tokens: 500
+      max_char_unit_len: 16
+      max_immediate_span_tokens: 24
+      char_repeat_run_min: 10
+      char_repeat_excess_over_source_min: 8
+      word_repeat_run_min: 8
+      word_repeat_excess_over_source_min: 5
+      immediate_span:
+        token_span_min: 2
+        repeat_run_min: 3
+        repeated_token_score_min: 8
+        excess_score_over_source_min: 6
+        long_span_token_span_min: 6
+        long_span_repeat_run_min: 2
+        long_span_repeated_token_score_min: 14
+        long_span_excess_score_over_source_min: 8
+      token_ngram:
+        n_min: 3
+        n_max: 12
+        repeat_count_min: 4
+        coverage_min: 0.18
+        repeated_token_excess_over_source_min: 8
+      short_ngram:
+        n_min: 2
+        n_max: 2
+        cheap_token_frequency_min: 8
+        repeat_count_min: 8
+        coverage_min: 0.04
+        repeated_token_excess_over_source_min: 10
+      token_frequency:
+        count_min: 30
+        ratio_min: 0.06
+        count_excess_over_source_min: 20
+      korean_function_token:
+        count_min: 15
+        ratio_min: 0.1
+      normalized_clause_duplication:
+        min_normalized_chars: 10
+        duplicate_count_min: 3
+        duplicate_ratio_min: 0.3
+        duplicate_count_excess_over_source_min: 2
+        short_duplicate_count_min: 2
+        short_duplicate_ratio_min: 0.8
+        short_duplicate_count_excess_over_source_min: 1
+        short_text_chars_max: 1000
+    truncation:
+      min_dangling_text_chars: 30
+      min_dangling_particle_text_chars: 80
+      dangling_korean_suffixes:
+      - 이었으며
+      - 였으며
+      - 었으며
+      - 했으며
+      - 되었으며
+      - 이며
+      - 하며
+      - 하고
+      - 했고
+      - 하였고
+      - 되었고
+      - 하기 위해
+      - 위해
+      - 때문에
+      dangling_korean_particles:
+      - 에
+      - 의
+      - 로
+      - 으로
+      - 와
+      - 과
+      - 은
+      - 는
+      - 을
+      - 를
+      - 이
+      - 가
+      - 에서
+      - 부터
+      - 까지
+model:
+  name_or_path: unsloth/Qwen3.5-4B
+  family: qwen3.5
+  size: 4b
+  variant: instruct
+  is_vision_model: true
+  trust_remote_code: true
+  use_hf_chat_template: true
+  tokenizer_revision: main
+prompts:
+  template_seed: 42
+  student_templates_path: prompts/student_templates.yaml
+  teacher_template_path: prompts/teacher_template.txt
+  student_selection:
+    random_template: true
+    deterministic_by_sample_id: true
+    use_language_variants: true
+  sft_training:
+    random_template: true
+    deterministic_by_sample_id: true
+    use_language_variants: true
+  evaluation:
+    random_template: false
+    base_template_id: base_tem_001
+    instruct_template_id: instruct_tem_005
+inference:
+  backend: vllm
+  temperature: 0.0
+  top_p: 1.0
+  max_new_tokens: 1500
+  num_gpus: 1
+  tensor_parallel_size: 1
+  data_parallel_replicas: auto
+  gpu_ids: null
+  shard_strategy: order_split
+  gpu_memory_utilization: 0.9
+  save_outputs: true
+  allow_fallback: false
+qe:
+  selection:
+    backend: comet
+    model: Unbabel/wmt22-cometkiwi-da
+    requires_reference: false
+    python_env_var: COMET_PYTHON
+    batch_size: 512
+  allow_fallback: false
+eval:
+  profile: val
+  dataset_path: data/val.jsonl
+  output_dir: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42/eval/val
+  source_field: source
+  target_field: target
+  metadata_field: metadata
+  limit: null
+  generation:
+    model_path: auto
+    max_new_tokens: 1024
+    temperature: 0.0
+    top_p: 1.0
+    num_gpus: 1
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.9
+  filter:
+    enabled: true
+  metrics:
+  - id: bleu
+    backend: sacrebleu
+    metric: bleu
+    requires_reference: true
+  - id: chrf
+    backend: sacrebleu
+    metric: chrf
+    requires_reference: true
+  - id: comet_wmt22_da
+    backend: comet
+    model: Unbabel/wmt22-comet-da
+    requires_reference: true
+    python_env_var: COMET_PYTHON
+    batch_size: 512
+teacher:
+  max_workers: 20
+  batch_size: 4
+  candidate_multiplier: 3
+  refill_until_target: true
+  structured_output: true
+  max_retries_per_row: 3
+  max_output_tokens: 8192
+  temperature: 0.0
+  invalid_label: invalid
+  prompt_path: prompts/teacher_template.txt
+  system_prompt_path: prompts/teacher_system.txt
+  user_prompt_path: prompts/teacher_user_batch.txt
+  allow_fallback: false
+  providers:
+  - name: openai
+    model: gpt-4.1
+    weight: 0.0
+    api_key_env: OPENAI_API_KEY
+  - name: anthropic
+    model: claude-sonnet-4-20250514
+    weight: 0.0
+    api_key_env: ANTHROPIC_API_KEY
+  - name: gemini
+    model: gemini-3.1-flash-lite
+    weight: 1.0
+    api_key_env: GEMINI_API_KEY
+training:
+  backend: unsloth
+  allow_hf_backend: false
+  tuning_mode: lora
+  dtype: auto
+  load_in_4bit: false
+  load_in_8bit: false
+  gradient_checkpointing: unsloth
+  learning_rate: 2.0e-05
+  warmup_ratio: 0.1
+  scheduler: cosine
+  stage_planned_rows_per_subset: 1000
+  optimizer: adamw_torch
+  max_grad_norm: 5.0
+  weight_decay: 0.0
+  num_train_epochs: 1
+  max_steps: -1
+  save_strategy: steps
+  save_steps: 100
+  save_total_limit: null
+  logging_steps: 10
+  dataloader_num_workers: 4
+  resume_from_checkpoint: auto
+  append_eos_token: true
+  response_only_loss: true
+  effective_batch_size: 128
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: auto
+  packing: false
+  lora:
+    rank: 16
+    alpha: 16
+    dropout: 0.0
+    bias: none
+    use_rslora: false
+    loftq_config: null
+    target_modules: auto_discover_text_layers
+    modules_to_save: null
+  train_vision_layers: false
+  optimizer_resume_required: true
+  scheduler_resume_required: true
+  global_step_resume_required: true
+  save_optimizer_state: true
+  save_scheduler_state: true
+  save_adapter: true
+  save_merged_model: true
+  merge_smoke_test_required: true
+  merge_smoke_test_mode: config_and_tokenizer
+  save_full_model: false
+  max_seq_length: null
+  prompt_overhead_tokens: 128
+  prevent_template_truncation: true
+logging:
+  local:
+    enabled: true
+    root_dir: artifacts/runs/qwen3.5_4b_instruct_lora_sf_on_seed42/logs
+  wandb:
+    enabled: true
+    project: dqs
+    entity: null
+    run_name: qwen3.5_4b_instruct_lora_sf_on_seed42
+    resume: allow
+    tags:
+    - dqs
+    - qwen3.5
+    - en-ko
+  save_effective_config: true
+  save_template_versions: true
+  save_all_step_artifacts: true
+version: 1

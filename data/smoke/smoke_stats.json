@@ -1,0 +1,141 @@
+{
+  "cycle": [
+    {
+      "id": "smoke_cycle_000",
+      "long_context": true,
+      "source_tokens": 1280,
+      "target_tokens": 25
+    },
+    {
+      "id": "smoke_cycle_001",
+      "long_context": false,
+      "source_tokens": 20,
+      "target_tokens": 28
+    },
+    {
+      "id": "smoke_cycle_002",
+      "long_context": false,
+      "source_tokens": 20,
+      "target_tokens": 31
+    },
+    {
+      "id": "smoke_cycle_003",
+      "long_context": false,
+      "source_tokens": 20,
+      "target_tokens": 25
+    },
+    {
+      "id": "smoke_cycle_004",
+      "long_context": true,
+      "source_tokens": 1280,
+      "target_tokens": 26
+    },
+    {
+      "id": "smoke_cycle_005",
+      "long_context": false,
+      "source_tokens": 20,
+      "target_tokens": 25
+    },
+    {
+      "id": "smoke_cycle_006",
+      "long_context": false,
+      "source_tokens": 22,
+      "target_tokens": 29
+    },
+    {
+      "id": "smoke_cycle_007",
+      "long_context": false,
+      "source_tokens": 18,
+      "target_tokens": 25
+    }
+  ],
+  "files": {
+    "cycle": "data/smoke/cycle.jsonl",
+    "effective_config": "data/smoke/effective_config.yaml",
+    "max_context_sft": "data/smoke/max_context_sft.jsonl",
+    "val": "data/smoke/val.jsonl"
+  },
+  "max_context_sft": [
+    {
+      "chat_template_applied": true,
+      "completion_token_count": 1501,
+      "id": "smoke_max_context_000",
+      "max_seq_length": 2908,
+      "prompt_token_count": 1394,
+      "remaining_tokens": 13,
+      "source_tokens": 1280,
+      "supervised_token_count": 1501,
+      "target_text_tokens": 1500,
+      "template_id": "instruct_tem_005",
+      "total_token_count": 2895
+    },
+    {
+      "chat_template_applied": true,
+      "completion_token_count": 1501,
+      "id": "smoke_max_context_001",
+      "max_seq_length": 2908,
+      "prompt_token_count": 1390,
+      "remaining_tokens": 17,
+      "source_tokens": 1280,
+      "supervised_token_count": 1501,
+      "target_text_tokens": 1500,
+      "template_id": "instruct_tem_004",
+      "total_token_count": 2891
+    },
+    {
+      "chat_template_applied": true,
+      "completion_token_count": 1501,
+      "id": "smoke_max_context_002",
+      "max_seq_length": 2908,
+      "prompt_token_count": 1379,
+      "remaining_tokens": 28,
+      "source_tokens": 1280,
+      "supervised_token_count": 1501,
+      "target_text_tokens": 1500,
+      "template_id": "instruct_tem_002",
+      "total_token_count": 2880
+    },
+    {
+      "chat_template_applied": true,
+      "completion_token_count": 1501,
+      "id": "smoke_max_context_003",
+      "max_seq_length": 2908,
+      "prompt_token_count": 1375,
+      "remaining_tokens": 32,
+      "source_tokens": 1280,
+      "supervised_token_count": 1501,
+      "target_text_tokens": 1500,
+      "template_id": "instruct_tem_003",
+      "total_token_count": 2876
+    }
+  ],
+  "max_input_tokens": 1280,
+  "max_output_tokens": 1500,
+  "max_seq_length": 2908,
+  "model": "unsloth/Qwen3.5-4B",
+  "model_variant": "instruct",
+  "prompt_overhead_tokens": 128,
+  "template_group": "instruct_templates",
+  "val": [
+    {
+      "id": "smoke_val_000",
+      "source_tokens": 16,
+      "target_tokens": 18
+    },
+    {
+      "id": "smoke_val_001",
+      "source_tokens": 16,
+      "target_tokens": 25
+    },
+    {
+      "id": "smoke_val_002",
+      "source_tokens": 13,
+      "target_tokens": 19
+    },
+    {
+      "id": "smoke_val_003",
+      "source_tokens": 11,
+      "target_tokens": 18
+    }
+  ]
+}

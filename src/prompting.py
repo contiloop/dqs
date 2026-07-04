@@ -14,6 +14,9 @@ class PromptError(ValueError):
     pass
 
 
+_TOKENIZER_CACHE: dict[tuple[str, str, bool], Any] = {}
+
+
 @dataclass(frozen=True, slots=True)
 class RenderedPrompt:
     text: str
@@ -110,11 +113,17 @@ def _apply_chat_template(
     model_name = str(model_cfg.get("name_or_path", "")).strip()
     if not model_name:
         raise PromptError("model.name_or_path is required to apply the HF chat template")
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        revision=str(model_cfg.get("tokenizer_revision", "main")),
-        trust_remote_code=bool(model_cfg.get("trust_remote_code", False)),
-    )
+    revision = str(model_cfg.get("tokenizer_revision", "main"))
+    trust_remote_code = bool(model_cfg.get("trust_remote_code", False))
+    cache_key = (model_name, revision, trust_remote_code)
+    tokenizer = _TOKENIZER_CACHE.get(cache_key)
+    if tokenizer is None:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            revision=revision,
+            trust_remote_code=trust_remote_code,
+        )
+        _TOKENIZER_CACHE[cache_key] = tokenizer
     messages: list[dict[str, str]] = []
     if system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt.strip()})

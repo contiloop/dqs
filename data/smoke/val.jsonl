@@ -1,0 +1,4 @@
+{"id":"smoke_val_000","metadata":{"smoke_kind":"val","smoke_row_index":0},"source":"Net sales increased 8.5% due to higher demand in North America.","source_tokens":16,"target":"북미 지역 수요 증가로 순매출은 8.5% 증가했다."}
+{"id":"smoke_val_001","metadata":{"smoke_kind":"val","smoke_row_index":1},"source":"The company expects capital expenditures to remain elevated through fiscal 2026.","source_tokens":16,"target":"회사는 2026 회계연도까지 자본 지출이 높은 수준을 유지할 것으로 예상한다."}
+{"id":"smoke_val_002","metadata":{"smoke_kind":"val","smoke_row_index":2},"source":"Foreign currency movements reduced operating income by approximately $12 million.","source_tokens":13,"target":"환율 변동은 영업이익을 약 1,200만 달러 감소시켰다."}
+{"id":"smoke_val_003","metadata":{"smoke_kind":"val","smoke_row_index":3},"source":"Deferred revenue primarily reflects advance billings for subscription contracts.","source_tokens":11,"target":"이연수익은 주로 구독 계약에 대한 선청구 금액을 반영한다."}

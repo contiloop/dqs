@@ -57,6 +57,21 @@ SFT_OUTPUT_DIR ?=
 SFT_DRY_RUN ?= 0
 SFT_NPROC_PER_NODE ?= 1
 SFT_OVERRIDES ?=
+SMOKE_CONFIG ?= configs/config.yaml
+SMOKE_OUTPUT_DIR ?= data/smoke
+SMOKE_OVERRIDES ?=
+SMOKE_LOCAL_FILES_ONLY ?= 0
+SMOKE_MAX_CONTEXT_ROWS ?= 4
+SMOKE_CYCLE_SUBSET_SIZE ?= 4
+SMOKE_CYCLE_SUBSETS ?= 2
+SMOKE_VAL_ROWS ?= 4
+SMOKE_SFT_OUTPUT_DIR ?= artifacts/smoke/max_context_sft
+SMOKE_SFT_DRY_RUN ?= 0
+SMOKE_SFT_OVERRIDES ?= run.id=smoke_max_context logging.wandb.enabled=false training.gradient_accumulation_steps=1 training.max_steps=1 training.save_strategy=no training.save_merged_model=false training.merge_smoke_test_required=false
+SMOKE_CYCLE_DRY_RUN ?= 0
+SMOKE_CYCLE_EVAL_DRY_RUN ?= 0
+SMOKE_CYCLE_OVERRIDES ?= run.id=smoke_cycle logging.wandb.enabled=false data.teacher_target_per_subset=2 teacher.candidate_multiplier=2 training.gradient_accumulation_steps=1 training.save_strategy=no training.save_merged_model=false training.merge_smoke_test_required=false
+SMOKE_CYCLE_EVAL_OVERRIDES ?=
 TORCH_INDEX_URL ?= https://download.pytorch.org/whl/cu128
 PIN_TORCH_VERSION ?= 2.10.0
 PIN_TORCHVISION_VERSION ?= 0.25.0
@@ -87,7 +102,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints sft verify-cuda-kernels
+.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -243,6 +258,49 @@ preprocess-raw:
 		$(if $(PREPROCESS_TOKENIZER_MODEL),--tokenizer-model "$(PREPROCESS_TOKENIZER_MODEL)",) \
 		$(if $(PREPROCESS_OUTPUT_DIR),--output-dir "$(PREPROCESS_OUTPUT_DIR)",) \
 		$(if $(PREPROCESS_LIMIT),--limit "$(PREPROCESS_LIMIT)",)
+
+smoke-data:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/smoke_data.py \
+		--config "$(SMOKE_CONFIG)" \
+		--output-dir "$(SMOKE_OUTPUT_DIR)" \
+		--max-context-rows "$(SMOKE_MAX_CONTEXT_ROWS)" \
+		--cycle-subset-size "$(SMOKE_CYCLE_SUBSET_SIZE)" \
+		--cycle-subsets "$(SMOKE_CYCLE_SUBSETS)" \
+		--val-rows "$(SMOKE_VAL_ROWS)" \
+		$(foreach override,$(SMOKE_OVERRIDES),--override "$(override)") \
+		$(if $(filter 1,$(SMOKE_LOCAL_FILES_ONLY)),--local-files-only,)
+
+smoke-sft-max-context: smoke-data
+	@$(MAKE) sft \
+		SFT_CONFIG="$(SMOKE_CONFIG)" \
+		SFT_SUBSET_IDX=0 \
+		SFT_DATASET_PATH="$(SMOKE_OUTPUT_DIR)/max_context_sft.jsonl" \
+		SFT_OUTPUT_DIR="$(SMOKE_SFT_OUTPUT_DIR)" \
+		SFT_DRY_RUN="$(SMOKE_SFT_DRY_RUN)" \
+		SFT_NPROC_PER_NODE="$(SFT_NPROC_PER_NODE)" \
+		SFT_OVERRIDES='$(SMOKE_OVERRIDES) $(SMOKE_SFT_OVERRIDES)'
+
+smoke-cycle: smoke-data
+	@$(MAKE) train-stage \
+		TRAIN_CONFIG="$(SMOKE_CONFIG)" \
+		TRAIN_DATA_PATH="$(SMOKE_OUTPUT_DIR)/cycle.jsonl" \
+		TRAIN_SUBSET_SIZE="$(SMOKE_CYCLE_SUBSET_SIZE)" \
+		TRAIN_STAGE_MAX_SUBSETS="$(SMOKE_CYCLE_SUBSETS)" \
+		TRAIN_RESUME=none \
+		TRAIN_FORCE=1 \
+		TRAIN_DRY_RUN="$(SMOKE_CYCLE_DRY_RUN)" \
+		EVAL_PROFILE=smoke \
+		EVAL_DATA_PATH="$(SMOKE_OUTPUT_DIR)/val.jsonl" \
+		EVAL_LIMIT="$(SMOKE_VAL_ROWS)" \
+		EVAL_FORCE=1 \
+		EVAL_DRY_RUN="$(SMOKE_CYCLE_EVAL_DRY_RUN)" \
+		EVAL_EVERY_N_SUBSETS=1 \
+		TRAIN_OVERRIDES='$(SMOKE_OVERRIDES) $(SMOKE_CYCLE_OVERRIDES)' \
+		EVAL_OVERRIDES='$(SMOKE_OVERRIDES) $(SMOKE_CYCLE_EVAL_OVERRIDES)'
 
 train:
 	@py="$(REAL_ENV_PY)"; \

@@ -80,10 +80,57 @@ Run every subset in order:
 make train-stage
 ```
 
-For a short smoke run:
+Create deterministic smoke datasets first:
 
 ```sh
-make train-stage TRAIN_STAGE_MAX_SUBSETS=2
+make smoke-data
+```
+
+This writes:
+
+```text
+data/smoke/max_context_sft.jsonl
+data/smoke/cycle.jsonl
+data/smoke/val.jsonl
+data/smoke/smoke_stats.json
+```
+
+Check the max-context token budget:
+
+```sh
+python - <<'PY'
+import json
+stats = json.load(open("data/smoke/smoke_stats.json"))
+print("max_seq_length", stats["max_seq_length"])
+for row in stats["max_context_sft"]:
+    print(row["id"], row["template_id"], row["total_token_count"], row["remaining_tokens"])
+PY
+```
+
+Run the max-context SFT smoke to check training VRAM. This uses rows near the
+configured `training.max_seq_length` and runs one SFT step by default:
+
+```sh
+make smoke-sft-max-context
+```
+
+Run the small end-to-end cycle smoke. This uses two 4-row subsets and exercises
+student inference, filtering, teacher generation, SFT, and smoke eval:
+
+```sh
+make smoke-cycle
+```
+
+For wiring-only cycle validation without model/API calls:
+
+```sh
+make smoke-cycle SMOKE_CYCLE_DRY_RUN=1 SMOKE_CYCLE_EVAL_DRY_RUN=1
+```
+
+To test multiple training GPUs in the max-context SFT smoke:
+
+```sh
+make smoke-sft-max-context SFT_NPROC_PER_NODE=4
 ```
 
 By default, `make train-stage` runs validation eval after every subset. To use

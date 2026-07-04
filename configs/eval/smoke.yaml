@@ -1,0 +1,27 @@
+eval:
+  profile: smoke
+  dataset_path: data/smoke/val.jsonl
+  output_dir: ${paths.artifact_root}/eval/${eval.profile}
+  source_field: ${data.source_field}
+  target_field: ${data.target_field}
+  metadata_field: ${data.metadata_field}
+  limit: null
+  generation:
+    model_path: auto
+    max_new_tokens: 512
+    temperature: 0.0
+    top_p: 1.0
+    num_gpus: 1
+    tensor_parallel_size: 1
+    gpu_memory_utilization: ${inference.gpu_memory_utilization}
+  filter:
+    enabled: true
+  metrics:
+    - id: bleu
+      backend: sacrebleu
+      metric: bleu
+      requires_reference: true
+    - id: chrf
+      backend: sacrebleu
+      metric: chrf
+      requires_reference: true
