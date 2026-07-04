@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from config_loader import compose_config
+from runtime_logging import configure_runtime_logging
 from train import (
     TRAIN_PHASES,
     _get,
@@ -20,6 +21,8 @@ from train import (
 from sft_train import estimate_update_steps_for_rows
 from wandb_logging import eval_metric_payload, log_wandb_metrics, subset_summary_payload
 
+
+configure_runtime_logging()
 
 def _stage_summary_path(cfg: Mapping[str, Any]) -> Path:
     return Path(str(_get(cfg, "paths.artifact_root"))) / "train_stage_summary.json"

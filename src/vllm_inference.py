@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from io_utils import read_jsonl, write_jsonl
+from runtime_logging import configure_runtime_logging, quiet_enabled
 
+
+configure_runtime_logging()
 
 def _patch_layer_type_validation_compat() -> None:
     try:
@@ -106,7 +109,8 @@ def run(input_path: Path, output_path: Path) -> None:
         raise SystemExit("model.name_or_path is required")
 
     kwargs = _engine_kwargs(first)
-    print(f"[vllm] loading model={model_name} kwargs={kwargs}", file=sys.stderr)
+    if not quiet_enabled():
+        print(f"[vllm] loading model={model_name} kwargs={kwargs}", file=sys.stderr)
     llm = LLM(model=model_name, **kwargs)
     try:
         lora_request = _lora_request(first)

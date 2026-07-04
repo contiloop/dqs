@@ -19,10 +19,13 @@ from degeneration_filter import classify_student_output
 from io_utils import read_jsonl, write_jsonl
 from prompting import load_student_templates, render_student_prompt
 from qe_score import comet_scores
+from runtime_logging import configure_runtime_logging
 from sft_dataset import write_sft_dataset
 from sft_train import run_sft_training
 from teacher_generation import run_teacher_generation
 
+
+configure_runtime_logging()
 
 TRAIN_PHASES = (
     "input",

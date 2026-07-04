@@ -11,10 +11,12 @@ from typing import Any, Mapping, Sequence
 
 from config_loader import compose_config
 from io_utils import read_jsonl
+from runtime_logging import configure_runtime_logging, quiet_third_party_output
 from text_tokenization import text_decode, text_token_ids, text_tokenizer
 from wandb_logging import configure_wandb_env, log_wandb_metrics
 
 
+configure_runtime_logging()
 IGNORE_INDEX = -100
 DEFAULT_TEXT_LORA_TARGET_MODULES = [
     "q_proj",
@@ -146,7 +148,8 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
     if str(training_cfg.get("backend", "unsloth")).lower() != "unsloth":
         raise SystemExit("training.backend must be unsloth; fallback training backends are disabled")
 
-    model_api = _resolve_model_api(cfg)
+    with quiet_third_party_output():
+        model_api = _resolve_model_api(cfg)
     dtype = _torch_dtype(training_cfg.get("dtype", "auto"))
     load_kwargs = {
         "model_name": str(model_cfg["name_or_path"]),
@@ -159,7 +162,8 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
         "revision": str(model_cfg.get("revision", model_cfg.get("tokenizer_revision", "main"))),
         "use_gradient_checkpointing": training_cfg.get("gradient_checkpointing", "unsloth"),
     }
-    model, tokenizer = _call_with_supported_kwargs(model_api.from_pretrained, load_kwargs)
+    with quiet_third_party_output():
+        model, tokenizer = _call_with_supported_kwargs(model_api.from_pretrained, load_kwargs)
     tokenizer_backend = text_tokenizer(tokenizer)
     if getattr(tokenizer_backend, "pad_token", None) is None and getattr(tokenizer_backend, "eos_token", None) is not None:
         tokenizer_backend.pad_token = tokenizer_backend.eos_token
@@ -259,7 +263,8 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
         "finetune_attention_modules": True,
         "finetune_mlp_modules": True,
     }
-    model = _call_with_supported_kwargs(model_api.get_peft_model, peft_kwargs)
+    with quiet_third_party_output():
+        model = _call_with_supported_kwargs(model_api.get_peft_model, peft_kwargs)
     if not bool(training_cfg.get("train_vision_layers", False)):
         _ensure_no_visual_trainable_parameters(model)
     _write_lora_target_audit(audit_dir / "lora_target_modules.json", model, target_modules)
@@ -654,21 +659,24 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     trust_remote_code = bool(_get(cfg, "model.trust_remote_code", False))
     final_dir = output_dir / "final"
     final_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(final_dir))
-    tokenizer.save_pretrained(str(final_dir))
+    with quiet_third_party_output():
+        model.save_pretrained(str(final_dir))
+        tokenizer.save_pretrained(str(final_dir))
     artifacts["final_model_dir"] = str(final_dir)
 
     if tuning_mode == "lora":
         adapter_dir = output_dir / "adapter"
         adapter_dir.mkdir(parents=True, exist_ok=True)
-        model.save_pretrained(str(adapter_dir))
-        tokenizer.save_pretrained(str(adapter_dir))
+        with quiet_third_party_output():
+            model.save_pretrained(str(adapter_dir))
+            tokenizer.save_pretrained(str(adapter_dir))
         artifacts["adapter_dir"] = str(adapter_dir)
         if bool(training_cfg.get("save_merged_model", False)):
             merged_dir = output_dir / "merged_16bit"
             if not hasattr(model, "save_pretrained_merged"):
                 raise SystemExit("LoRA merged save requested, but model.save_pretrained_merged is unavailable")
-            model.save_pretrained_merged(str(merged_dir), tokenizer, save_method="merged_16bit")
+            with quiet_third_party_output():
+                model.save_pretrained_merged(str(merged_dir), tokenizer, save_method="merged_16bit")
             artifacts["merged_model_dir"] = str(merged_dir)
             if bool(training_cfg.get("merge_smoke_test_required", False)):
                 smoke_tests.append(
@@ -681,8 +689,9 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     elif bool(training_cfg.get("save_full_model", True)):
         full_dir = output_dir / "full_model"
         full_dir.mkdir(parents=True, exist_ok=True)
-        model.save_pretrained(str(full_dir), safe_serialization=True)
-        tokenizer.save_pretrained(str(full_dir))
+        with quiet_third_party_output():
+            model.save_pretrained(str(full_dir), safe_serialization=True)
+            tokenizer.save_pretrained(str(full_dir))
         artifacts["full_model_dir"] = str(full_dir)
     if smoke_tests:
         artifacts["smoke_tests"] = smoke_tests

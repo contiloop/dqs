@@ -11,6 +11,7 @@ SETUP_PY := $(if $(filter 1,$(USE_VENV)),$(VENV_PYTHON),$(PYTHON))
 QE_VENV_DIR ?= $(HOME)/.venvs/comet
 COMET_PYTHON ?= $(QE_VENV_DIR)/bin/python
 METRICX_PYTHON ?= python
+DQS_QUIET ?= 1
 SKIP_CAUSAL_CONV1D ?= 0
 DATA_CONFIG ?= configs/data.yaml
 HF_DATASET_REPO ?=
@@ -102,6 +103,14 @@ PIN_NUMPY_VERSION ?= 2.2.6
 # Keep FLA aligned with torch 2.10 runtime and avoid transitive resolver drift.
 PIN_FLA_CORE_VERSION ?= 0.4.2
 PIN_FLASH_LINEAR_ATTENTION_VERSION ?= 0.4.2
+
+export DQS_QUIET
+export VLLM_LOGGING_LEVEL ?= ERROR
+export VLLM_LOGGING_COLOR ?= 0
+export TRANSFORMERS_VERBOSITY ?= error
+export TOKENIZERS_PARALLELISM ?= false
+export PYTHONWARNINGS ?= ignore
+export WANDB_SILENT ?= true
 
 # FlashAttention2 wheel hosted in a HF dataset.
 # - FLASH_ATTN_GPU_ARCH: auto | sm80 | sm120 | default

@@ -8,6 +8,11 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
+from runtime_logging import configure_runtime_logging, quiet_enabled
+
+
+configure_runtime_logging()
+
 
 def _resolve_python(env_var: str) -> str:
     value = os.environ.get(env_var, "").strip()
@@ -55,9 +60,10 @@ def comet_scores(
             "scores = pred.get('scores') if isinstance(pred, dict) else getattr(pred, 'scores', None)\n"
             f"open({str(output_path)!r}, 'w', encoding='utf-8').write(json.dumps(scores))\n"
         )
-        result = subprocess.run([comet_python, "-c", script], text=True)
+        result = subprocess.run([comet_python, "-c", script], text=True, capture_output=quiet_enabled())
         if result.returncode != 0:
-            raise RuntimeError(f"COMET subprocess failed with code {result.returncode}")
+            stderr = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(f"COMET subprocess failed with code {result.returncode}: {stderr[-2000:]}")
         if not output_path.exists():
             raise RuntimeError("COMET subprocess did not write output")
         scores = json.loads(output_path.read_text(encoding="utf-8"))

@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from io_utils import write_jsonl
+from runtime_logging import configure_runtime_logging
+
+
+configure_runtime_logging()
 
 
 def _resolve_python(env_var: str) -> str:

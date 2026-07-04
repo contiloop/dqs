@@ -15,8 +15,11 @@ from io_utils import read_jsonl, write_jsonl
 from metricx_score import metricx_scores
 from prompting import load_student_templates, render_student_prompt
 from qe_score import comet_scores
+from runtime_logging import configure_runtime_logging
 from wandb_logging import eval_metric_payload, log_wandb_metrics
 
+
+configure_runtime_logging()
 
 def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
     cursor: Any = cfg
