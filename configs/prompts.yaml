@@ -12,5 +12,5 @@ prompts:
     use_language_variants: true
   evaluation:
     random_template: false
-    base_template_id: base_label_en_001
-    instruct_template_id: instruct_ko_professional_001
+    base_template_id: base_tem_001
+    instruct_template_id: instruct_tem_005

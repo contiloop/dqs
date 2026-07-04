@@ -15,6 +15,7 @@ from io_utils import read_jsonl, write_jsonl
 from metricx_score import metricx_scores
 from prompting import load_student_templates, render_student_prompt
 from qe_score import comet_scores
+from wandb_logging import eval_metric_payload, log_wandb_metrics
 
 
 def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
@@ -91,20 +92,34 @@ def _auto_model_candidates(cfg: Mapping[str, Any]) -> list[Path]:
     return [checkpoint_dir / name for name in names]
 
 
-def _resolve_generation_model_path(
+def _is_lora_adapter_path(path: Path) -> bool:
+    return path.is_dir() and (
+        (path / "adapter_config.json").exists()
+        or (path / "adapter_model.safetensors").exists()
+        or (path / "adapter_model.bin").exists()
+    )
+
+
+def _resolve_generation_model_spec(
     cfg: Mapping[str, Any],
     *,
     model_path: str | None,
     require_trained_artifact: bool,
-) -> str:
+) -> dict[str, str | None]:
     raw = str(model_path or _get(cfg, "eval.generation.model_path", "auto")).strip()
     if raw and raw != "auto":
-        return raw
+        raw_path = Path(raw)
+        if raw_path.exists() and _is_lora_adapter_path(raw_path):
+            return {
+                "model_path": str(_get(cfg, "model.name_or_path")),
+                "lora_adapter_path": str(raw_path),
+            }
+        return {"model_path": raw, "lora_adapter_path": None}
     for candidate in _auto_model_candidates(cfg):
         if candidate.exists():
-            return str(candidate)
+            return {"model_path": str(candidate), "lora_adapter_path": None}
     if not require_trained_artifact:
-        return str(_get(cfg, "model.name_or_path"))
+        return {"model_path": str(_get(cfg, "model.name_or_path")), "lora_adapter_path": None}
     candidates = ", ".join(str(path) for path in _auto_model_candidates(cfg))
     raise SystemExit(f"eval.generation.model_path=auto could not find a trained artifact; checked: {candidates}")
 
@@ -125,7 +140,7 @@ def _build_eval_requests(
     *,
     cfg: Mapping[str, Any],
     rows: list[dict[str, Any]],
-    model_path: str,
+    model_spec: Mapping[str, str | None],
 ) -> list[dict[str, Any]]:
     prompt_cfg = _get(cfg, "prompts", {})
     if not isinstance(prompt_cfg, Mapping):
@@ -134,7 +149,9 @@ def _build_eval_requests(
     template_cfg = load_student_templates(template_path)
     model_cfg = _get(cfg, "model", {})
     model_cfg = dict(model_cfg) if isinstance(model_cfg, Mapping) else {}
-    model_cfg["name_or_path"] = model_path
+    model_cfg["name_or_path"] = str(model_spec["model_path"])
+    if model_spec.get("lora_adapter_path"):
+        model_cfg["lora_adapter_path"] = str(model_spec["lora_adapter_path"])
     inference_cfg = _eval_inference_cfg(cfg)
     profile = str(_get(cfg, "eval.profile", "train"))
 
@@ -483,6 +500,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--skip-wandb-log", action="store_true")
     return parser.parse_args()
 
 
@@ -496,12 +514,12 @@ def main() -> None:
     limit = args.limit if args.limit is not None else _get(cfg, "eval.limit")
     limit_int = None if limit is None else int(limit)
     rows = _load_eval_rows(cfg, args.data_path, limit_int)
-    model_path = _resolve_generation_model_path(
+    model_spec = _resolve_generation_model_spec(
         cfg,
         model_path=args.model_path,
         require_trained_artifact=not args.dry_run,
     )
-    requests = _build_eval_requests(cfg=cfg, rows=rows, model_path=model_path)
+    requests = _build_eval_requests(cfg=cfg, rows=rows, model_spec=model_spec)
     request_path = output_dir / "eval_requests.jsonl"
     output_path = output_dir / "eval_outputs.jsonl"
     write_jsonl(request_path, requests)
@@ -534,7 +552,8 @@ def main() -> None:
         "run_id": _get(cfg, "run.id"),
         "eval_profile": _get(cfg, "eval.profile"),
         "dataset_path": str(args.data_path or _get(cfg, "eval.dataset_path")),
-        "model_path": model_path,
+        "model_path": model_spec["model_path"],
+        "lora_adapter_path": model_spec.get("lora_adapter_path"),
         "output_dir": str(output_dir),
         "rows": len(filtered),
         "generation_ok_rows": ok_rows,
@@ -549,6 +568,13 @@ def main() -> None:
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
+    if not args.skip_wandb_log:
+        log_wandb_metrics(
+            cfg,
+            eval_metric_payload(summary, prefix=f"eval/{_get(cfg, 'eval.profile')}"),
+            job_type="eval",
+            finish=True,
+        )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
 

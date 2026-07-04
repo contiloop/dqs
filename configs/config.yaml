@@ -6,7 +6,7 @@ defaults:
   - prompts
   - inference
   - qe
-  - eval: train
+  - eval: val
   - teacher
   - training: lora
   - logging

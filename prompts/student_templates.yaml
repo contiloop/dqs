@@ -26,124 +26,114 @@ domain:
   name_ko: 경제·금융
 
 base_templates:
-  - id: base_label_en_001
+  - id: base_tem_001
     text: |
-      {src_label_en}:
+      Translate this from English to Korean:
+
+      English:
       {src}
 
-      {tgt_label_en}:
+      Korean:
 
-  - id: base_label_ko_001
+  - id: base_tem_002
     text: |
-      {src_label_ko}:
+      Translate the following economic and financial text from {src_lang_name} to {tgt_lang_name}: {src}
+
+  - id: base_tem_003
+    text: |
+      Translate the following economic and financial text to {tgt_lang_name}: {src}
+
+  - id: base_tem_004
+    text: |
+      다음 문장을 영어에서 한국어로 번역하세요:
+
+      영어:
       {src}
 
-      {tgt_label_ko}:
+      한국어:
 
-  - id: base_task_en_001
+  - id: base_tem_005
     text: |
-      Task: {src_lang_en}-to-{tgt_lang_en} translation
-      Source:
-      {src}
+      다음 경제·금융 텍스트를 {src_lang_ko}에서 {tgt_lang_ko}로 번역하세요: {src}
 
-      Target:
-
-  - id: base_task_ko_001
+  - id: base_tem_006
     text: |
-      작업: {src_lang_ko}를 {tgt_lang_ko}로 번역
-      원문:
-      {src}
-
-      번역:
-
-  - id: base_econ_en_001
-    text: |
-      Task: {src_lang_en}-to-{tgt_lang_en} {domain_en} translation
-      Source:
-      {src}
-
-      Translation:
-
-  - id: base_econ_ko_001
-    text: |
-      작업: {domain_ko} 분야의 {src_lang_ko}-{tgt_lang_ko} 번역
-      원문:
-      {src}
-
-      번역:
+      다음 경제·금융 텍스트를 {tgt_lang_ko}로 번역하세요: {src}
 
 instruct_templates:
-  - id: instruct_en_direct_001
+  - id: instruct_tem_001
     lang: en
-    text: |
-      Translate the following {src_lang_en} text into {tgt_lang_en}. Output only the {tgt_lang_en} translation.
+    user: |
+      Translate this from English to Korean:
 
-      {src_label_en}:
+      English:
       {src}
 
-      {tgt_label_en}:
+      Korean:
 
-  - id: instruct_en_professional_001
+  - id: instruct_tem_002
     lang: en
-    text: |
-      You are a professional {src_lang_en}-to-{tgt_lang_en} translator specializing in {domain_en} texts. Preserve the meaning, numbers, names, tickers, dates, and terminology. Output only the {tgt_lang_en} translation.
+    system: |
+      You are a professional English-to-Korean translator for economic, financial, and corporate disclosure texts.
+      Translate meaning, numbers, dates, tickers, company names, product names, units, and terminology appropriately for Korean.
+      Do not add explanations, summaries, or content not present in the source.
+      Output only the Korean translation.
+    user: |
+      Translate the following economic and financial text from English to Korean:
 
       Source:
       {src}
 
       Translation:
 
-  - id: instruct_en_source_first_001
+  - id: instruct_tem_003
     lang: en
-    text: |
+    system: |
+      You are a professional English-to-Korean translator for economic, financial, and corporate disclosure texts.
+      Translate meaning, numbers, dates, tickers, company names, product names, units, and terminology appropriately for Korean.
+      Do not add explanations, summaries, or content not present in the source.
+      Output only the Korean translation.
+    user: |
+      Translate this from English to Korean:
+
+      English:
       {src}
 
-      Translate the {src_lang_en} text above into {tgt_lang_en}. Output only the translation.
+      Korean:
 
-  - id: instruct_en_natural_001
-    lang: en
-    text: |
-      What is the natural {tgt_lang_en} translation of the following {src_lang_en} sentence? Output only the translation.
-
-      {src}
-
-  - id: instruct_ko_direct_001
+  - id: instruct_tem_004
     lang: ko
-    text: |
-      다음 {src_lang_ko} 문장을 {tgt_lang_ko}로 번역하세요. 번역문만 출력하세요.
+    system: |
+      당신은 경제, 금융, 기업 공시 문서를 다루는 영어-한국어 전문 번역가입니다.
+      의미, 숫자, 날짜, 티커, 회사명, 상품명, 단위, 전문용어를 한국어 문맥에 맞게 알맞게 번역하세요.
+      원문에 없는 설명, 요약, 내용을 추가하지 마세요.
+      한국어 번역문만 출력하세요.
+    user: |
+      다음 문장을 영어에서 한국어로 번역하세요:
 
-      {src_label_ko}:
+      영어:
       {src}
 
-      {tgt_label_ko}:
+      한국어:
 
-  - id: instruct_ko_professional_001
+  - id: instruct_tem_005
     lang: ko
-    text: |
-      당신은 {domain_ko} 분야 전문 {src_lang_ko}-{tgt_lang_ko} 번역가입니다. 의미, 숫자, 고유명사, 티커, 날짜, 전문용어를 정확히 보존해 자연스러운 {tgt_lang_ko}로 번역하세요. 설명 없이 번역문만 출력하세요.
+    system: |
+      당신은 경제, 금융, 기업 공시 문서를 다루는 영어-한국어 전문 번역가입니다.
+      의미, 숫자, 날짜, 티커, 회사명, 상품명, 단위, 전문용어를 한국어 문맥에 맞게 알맞게 번역하세요.
+      원문에 없는 설명, 요약, 내용을 추가하지 마세요.
+      한국어 번역문만 출력하세요.
+    user: |
+      다음 경제·금융 텍스트를 영어에서 한국어로 번역하세요:
 
       원문:
       {src}
 
       번역:
 
-  - id: instruct_ko_source_first_001
+  - id: instruct_tem_006
     lang: ko
-    text: |
+    user: |
       {src}
 
-      위 {src_lang_ko} 문장을 자연스러운 {tgt_lang_ko}로 번역하세요. 번역문만 출력하세요.
-
-  - id: instruct_ko_report_001
-    lang: ko
-    text: |
-      다음 문장을 {domain_ko} 리포트 문체의 {tgt_lang_ko}로 번역하세요. 원문을 반복하지 말고 번역문만 출력하세요.
-
-      {src}
-
-  - id: instruct_ko_meaning_001
-    lang: ko
-    text: |
-      아래 {src_lang_ko} 문장의 의미를 {tgt_lang_ko}로 자연스럽게 옮기세요. 부연 설명 없이 번역문만 작성하세요.
-
-      {src}
+      한국어로 번역해줘.

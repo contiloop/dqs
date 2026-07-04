@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 
 from config_loader import compose_config
 from io_utils import read_jsonl
+from wandb_logging import configure_wandb_env, log_wandb_metrics
 
 
 IGNORE_INDEX = -100
@@ -43,7 +44,8 @@ def _default_max_seq_length(cfg: Mapping[str, Any]) -> int:
         return int(configured)
     max_input = int(_get(cfg, "data.max_input_tokens", 1280) or 1280)
     max_output = int(_get(cfg, "data.max_output_tokens", 1500) or 1500)
-    return max_input + max_output + 512
+    prompt_overhead = int(_get(cfg, "training.prompt_overhead_tokens", 128) or 128)
+    return max_input + max_output + prompt_overhead
 
 
 def _world_size() -> int:
@@ -485,6 +487,7 @@ def _training_argument_kwargs(
 
     wandb_cfg = logging_cfg.get("wandb", {}) if isinstance(logging_cfg.get("wandb", {}), Mapping) else {}
     report_to: list[str] = ["wandb"] if bool(wandb_cfg.get("enabled", False)) else []
+    configure_wandb_env(cfg)
     bf16 = bool(torch.cuda.is_available() and torch.cuda.is_bf16_supported())
     fp16 = bool(torch.cuda.is_available() and not bf16)
     return {
@@ -771,6 +774,19 @@ def run_sft_training(
                 "stage_state_path": stage_plan["path"],
             }
         )
+    log_wandb_metrics(
+        cfg,
+        {
+            "train/global_step": summary.get("global_step"),
+            "train/subset_idx": subset_idx,
+            "train/subset_sft_rows": len(tokenized_rows),
+            "train/subset_train_loss": summary.get("train_loss"),
+            "stage/subset_update_steps": summary.get("stage_subset_update_steps"),
+            "stage/scheduler_total_steps": summary.get("stage_scheduler_total_steps"),
+        },
+        step=summary.get("global_step") if isinstance(summary.get("global_step"), int) else None,
+        job_type="sft",
+    )
     summary_path = output_dir_obj / f"sft_training_summary_subset_{subset_idx:03d}.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return summary

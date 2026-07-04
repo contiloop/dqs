@@ -49,4 +49,5 @@ training:
   merge_smoke_test_mode: config_and_tokenizer
   save_full_model: false
   max_seq_length: null
+  prompt_overhead_tokens: 128
   prevent_template_truncation: true

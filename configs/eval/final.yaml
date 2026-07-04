@@ -8,7 +8,7 @@ eval:
   limit: null
   generation:
     model_path: auto
-    max_new_tokens: ${inference.max_new_tokens}
+    max_new_tokens: 1024
     temperature: 0.0
     top_p: 1.0
     num_gpus: 1

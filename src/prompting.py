@@ -76,8 +76,10 @@ def _template_values(template_cfg: Mapping[str, Any], *, source: str, row_id: st
         "tgt_label_en": str(tgt.get("label_en", "Korean")),
         "tgt_label_ko": str(tgt.get("label_ko", "한국어")),
         "src_lang_en": str(src.get("name_en", "English")),
+        "src_lang_name": str(src.get("name_en", "English")),
         "src_lang_ko": str(src.get("name_ko", "영어")),
         "tgt_lang_en": str(tgt.get("name_en", "Korean")),
+        "tgt_lang_name": str(tgt.get("name_en", "Korean")),
         "tgt_lang_ko": tgt_lang_ko,
         "domain_en": str(domain.get("name_en", "economic and financial")),
         "domain_ko": str(domain.get("name_ko", "경제·금융")),
@@ -90,9 +92,16 @@ def _template_group_for_model(model_cfg: Mapping[str, Any]) -> str:
     return "base_templates"
 
 
-def _apply_chat_template(prompt: str, model_cfg: Mapping[str, Any]) -> tuple[str, bool]:
+def _apply_chat_template(
+    *,
+    user_prompt: str,
+    system_prompt: str,
+    model_cfg: Mapping[str, Any],
+) -> tuple[str, bool]:
     if not bool(model_cfg.get("use_hf_chat_template", False)):
-        return prompt, False
+        if system_prompt:
+            return f"{system_prompt.strip()}\n\n{user_prompt}", False
+        return user_prompt, False
     try:
         from transformers import AutoTokenizer
     except ModuleNotFoundError as exc:
@@ -106,7 +115,10 @@ def _apply_chat_template(prompt: str, model_cfg: Mapping[str, Any]) -> tuple[str
         revision=str(model_cfg.get("tokenizer_revision", "main")),
         trust_remote_code=bool(model_cfg.get("trust_remote_code", False)),
     )
-    messages = [{"role": "user", "content": prompt}]
+    messages: list[dict[str, str]] = []
+    if system_prompt.strip():
+        messages.append({"role": "system", "content": system_prompt.strip()})
+    messages.append({"role": "user", "content": user_prompt})
     try:
         rendered = tokenizer.apply_chat_template(
             messages,
@@ -155,10 +167,19 @@ def render_student_prompt(
         raise PromptError(f"invalid student template at {group_name}[{template_idx}]")
 
     text = str(template.get("text", ""))
+    system_text = str(template.get("system", ""))
+    user_text = str(template.get("user", text))
     template_id = str(template.get("id", f"{group_name}_{template_idx:03d}"))
-    rendered = text.format(**_template_values(template_cfg, source=source, row_id=row_id, seed=seed))
-    final_prompt, chat_applied = _apply_chat_template(rendered, model_cfg)
-    template_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    values = _template_values(template_cfg, source=source, row_id=row_id, seed=seed)
+    rendered_system = system_text.format(**values)
+    rendered_user = user_text.format(**values)
+    final_prompt, chat_applied = _apply_chat_template(
+        user_prompt=rendered_user,
+        system_prompt=rendered_system,
+        model_cfg=model_cfg,
+    )
+    hash_source = f"system:{system_text}\nuser:{user_text}"
+    template_hash = hashlib.sha256(hash_source.encode("utf-8")).hexdigest()
     return RenderedPrompt(
         text=final_prompt,
         template_id=template_id,

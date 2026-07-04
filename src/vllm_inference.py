@@ -66,7 +66,24 @@ def _engine_kwargs(first: Mapping[str, Any]) -> dict[str, Any]:
     tensor_parallel_size = int(inference_cfg.get("tensor_parallel_size", 1) or 1)
     if tensor_parallel_size > 1:
         kwargs["tensor_parallel_size"] = tensor_parallel_size
+    if model_cfg.get("lora_adapter_path"):
+        kwargs["enable_lora"] = True
+        kwargs["max_loras"] = 1
     return kwargs
+
+
+def _lora_request(first: Mapping[str, Any]) -> Any | None:
+    model_cfg = first.get("model", {})
+    if not isinstance(model_cfg, Mapping):
+        return None
+    adapter_path = str(model_cfg.get("lora_adapter_path", "") or "").strip()
+    if not adapter_path:
+        return None
+    try:
+        from vllm.lora.request import LoRARequest
+    except ModuleNotFoundError as exc:
+        raise SystemExit("vLLM LoRA evaluation requires vllm.lora.request.LoRARequest") from exc
+    return LoRARequest("dqs_checkpoint_adapter", 1, adapter_path)
 
 
 def run(input_path: Path, output_path: Path) -> None:
@@ -92,6 +109,7 @@ def run(input_path: Path, output_path: Path) -> None:
     print(f"[vllm] loading model={model_name} kwargs={kwargs}", file=sys.stderr)
     llm = LLM(model=model_name, **kwargs)
     try:
+        lora_request = _lora_request(first)
         prompts = [str(row.get("prompt", "")) for row in requests]
         params = [_sampling_params(row) for row in requests]
         first_param = params[0]
@@ -101,7 +119,10 @@ def run(input_path: Path, output_path: Path) -> None:
             and getattr(param, "top_p", None) == getattr(first_param, "top_p", None)
             for param in params[1:]
         )
-        outputs = llm.generate(prompts, sampling_params=first_param if uniform else params)
+        generate_kwargs: dict[str, Any] = {"sampling_params": first_param if uniform else params}
+        if lora_request is not None:
+            generate_kwargs["lora_request"] = lora_request
+        outputs = llm.generate(prompts, **generate_kwargs)
         rows: list[dict[str, Any]] = []
         for idx, output in enumerate(outputs):
             request = requests[idx]

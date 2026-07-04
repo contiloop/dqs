@@ -18,6 +18,7 @@ from train import (
     _subset_root,
 )
 from sft_train import estimate_update_steps_for_rows
+from wandb_logging import eval_metric_payload, log_wandb_metrics, subset_summary_payload
 
 
 def _stage_summary_path(cfg: Mapping[str, Any]) -> Path:
@@ -161,6 +162,7 @@ def _eval_cmd(
         f"eval={args.eval_profile}",
         "--output-dir",
         str(_eval_output_dir(cfg=cfg, args=args, subset_idx=subset_idx)),
+        "--skip-wandb-log",
     ]
     for override in args.override:
         cmd.extend(["--override", override])
@@ -201,6 +203,11 @@ def _write_stage_summary(path: Path, summary: Mapping[str, Any]) -> None:
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def _metric_step_from_subset_summary(summary: Mapping[str, Any]) -> int | None:
+    value = summary.get("sft_training_global_step")
+    return int(value) if isinstance(value, int) else None
 
 
 def run_stage(args: argparse.Namespace) -> dict[str, Any]:
@@ -275,6 +282,10 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         subset_record["status"] = "completed"
         subset_record["summary_path"] = str(_front_stage_summary_path(cfg, subset_idx))
         subset_record["summary"] = _read_json_if_exists(_front_stage_summary_path(cfg, subset_idx))
+        metric_step = _metric_step_from_subset_summary(subset_record["summary"])
+        subset_metrics = subset_summary_payload(subset_record["summary"])
+        subset_metrics["stage/sft_scheduler_total_steps"] = sft_scheduler_total_steps
+        log_wandb_metrics(cfg, subset_metrics, step=metric_step, job_type="train-stage", finish=True)
 
         if _should_eval_after_subset(
             args=args,
@@ -299,6 +310,14 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
             subset_record["eval_output_dir"] = str(
                 _eval_output_dir(cfg=cfg, args=args, subset_idx=subset_idx)
             )
+            eval_summary = _read_json_if_exists(
+                _eval_output_dir(cfg=cfg, args=args, subset_idx=subset_idx) / "eval_summary.json"
+            )
+            eval_metrics = eval_metric_payload(eval_summary, prefix=f"eval/{args.eval_profile}")
+            eval_metrics["subset/index"] = subset_idx
+            if metric_step is not None:
+                eval_metrics["train/global_step"] = metric_step
+            log_wandb_metrics(cfg, eval_metrics, step=metric_step, job_type="eval", finish=True)
 
         summary["subsets"].append(subset_record)
         _write_stage_summary(summary_path, summary)

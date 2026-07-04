@@ -34,16 +34,22 @@ TRAIN_OVERRIDES ?=
 TRAIN_STAGE_END_SUBSET ?=
 TRAIN_STAGE_MAX_SUBSETS ?=
 EVAL_CONFIG ?= configs/config.yaml
-EVAL_PROFILE ?= train
+EVAL_PROFILE ?= val
 EVAL_DATA_PATH ?=
 EVAL_MODEL_PATH ?=
 EVAL_OUTPUT_DIR ?=
 EVAL_LIMIT ?=
 EVAL_DRY_RUN ?= 0
 EVAL_FORCE ?= 0
-EVAL_EVERY_N_SUBSETS ?= 0
+EVAL_EVERY_N_SUBSETS ?= 1
 EVAL_ON_FINAL_SUBSET ?= 1
 EVAL_OVERRIDES ?=
+EVAL_CHECKPOINT_PROFILE ?= final
+EVAL_CHECKPOINT_DIR ?=
+EVAL_CHECKPOINT_OUTPUT_DIR ?=
+EVAL_CHECKPOINT_START_STEP ?=
+EVAL_CHECKPOINT_END_STEP ?=
+EVAL_CHECKPOINT_MAX ?=
 SFT_CONFIG ?= configs/config.yaml
 SFT_SUBSET_IDX ?=
 SFT_DATASET_PATH ?=
@@ -81,7 +87,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval sft verify-cuda-kernels
+.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints sft verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -296,6 +302,25 @@ eval:
 		$(if $(EVAL_OUTPUT_DIR),--output-dir "$(EVAL_OUTPUT_DIR)",) \
 		$(if $(EVAL_LIMIT),--limit "$(EVAL_LIMIT)",) \
 		$(foreach override,$(EVAL_OVERRIDES),--override "$(override)") \
+		$(if $(filter 1,$(EVAL_DRY_RUN)),--dry-run,) \
+		$(if $(filter 1,$(EVAL_FORCE)),--force,)
+
+eval-checkpoints:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" "$$py" src/eval_checkpoints.py \
+		--config "$(EVAL_CONFIG)" \
+		--profile "$(EVAL_CHECKPOINT_PROFILE)" \
+		$(if $(EVAL_CHECKPOINT_DIR),--checkpoint-dir "$(EVAL_CHECKPOINT_DIR)",) \
+		$(if $(EVAL_CHECKPOINT_OUTPUT_DIR),--output-dir "$(EVAL_CHECKPOINT_OUTPUT_DIR)",) \
+		$(if $(EVAL_DATA_PATH),--data-path "$(EVAL_DATA_PATH)",) \
+		$(if $(EVAL_LIMIT),--limit "$(EVAL_LIMIT)",) \
+		$(if $(EVAL_CHECKPOINT_START_STEP),--start-step "$(EVAL_CHECKPOINT_START_STEP)",) \
+		$(if $(EVAL_CHECKPOINT_END_STEP),--end-step "$(EVAL_CHECKPOINT_END_STEP)",) \
+		$(if $(EVAL_CHECKPOINT_MAX),--max-checkpoints "$(EVAL_CHECKPOINT_MAX)",) \
+		$(foreach override,$(EVAL_OVERRIDES),--eval-override "$(override)") \
 		$(if $(filter 1,$(EVAL_DRY_RUN)),--dry-run,) \
 		$(if $(filter 1,$(EVAL_FORCE)),--force,)
 

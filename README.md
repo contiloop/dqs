@@ -86,10 +86,11 @@ For a short smoke run:
 make train-stage TRAIN_STAGE_MAX_SUBSETS=2
 ```
 
-Run training-time eval every 5 subsets:
+By default, `make train-stage` runs validation eval after every subset. To use
+a wider cadence:
 
 ```sh
-make train-stage EVAL_EVERY_N_SUBSETS=5 EVAL_PROFILE=train
+make train-stage EVAL_EVERY_N_SUBSETS=5
 ```
 
 Run SFT from an existing subset artifact:
@@ -176,16 +177,22 @@ sft_train.jsonl
 
 ### 7. Evaluate
 
-Run the lightweight evaluation profile on `data/test.jsonl`:
+Run the validation evaluation profile on `data/val.jsonl`:
 
 ```sh
-make eval EVAL_PROFILE=train
+make eval EVAL_PROFILE=val
 ```
 
-Run the heavyweight final evaluation profile on a separate instance:
+Run the heavyweight final evaluation profile on `data/test.jsonl`:
 
 ```sh
 make eval EVAL_PROFILE=final
+```
+
+Run final evaluation for every saved checkpoint:
+
+```sh
+make eval-checkpoints
 ```
 
 To evaluate a downloaded local model artifact:
@@ -204,6 +211,13 @@ Eval artifacts are written under:
 artifacts/runs/${run.id}/eval/${eval.profile}/
 ```
 
+Checkpoint eval artifacts are written under:
+
+```text
+artifacts/runs/${run.id}/eval/final_by_checkpoint/checkpoint-000008/
+artifacts/runs/${run.id}/eval/final_by_checkpoint/summary.jsonl
+```
+
 Key eval files:
 
 ```text
@@ -212,3 +226,7 @@ eval_scores.jsonl
 eval_filtered.jsonl
 eval_translations.jsonl
 ```
+
+W&B logs compact curves only: SFT loss/LR from Trainer plus subset summary
+counts and eval metric means. Row-level requests, outputs, translations, and
+scores stay in local JSONL artifacts.
