@@ -823,6 +823,13 @@ def _run_qe_selection(
         encoding="utf-8",
     )
     write_jsonl(subset_dir / "selected_for_teacher.jsonl", selected)
+    if not selected:
+        raise SystemExit(
+            "teacher selection produced zero clean candidates after student filtering; "
+            "not falling back to filtered or non-clean rows. Inspect "
+            f"{subset_dir / 'student_filter_summary.json'} and "
+            f"{subset_dir / 'filter_blocked_selection.jsonl'}."
+        )
     return selected
 
 
@@ -1079,7 +1086,7 @@ def _quota_from_weights(total: int, weights: list[float]) -> list[int]:
         return [0 for _ in weights]
     weight_sum = sum(weights)
     if weight_sum <= 0:
-        return [0 for _ in weights]
+        raise SystemExit("cannot allocate length bucket quotas because all bucket weights are zero")
     raw = [(total * weight / weight_sum) for weight in weights]
     quotas = [int(value) for value in raw]
     remainder = total - sum(quotas)
@@ -1098,6 +1105,9 @@ def _rank_teacher_candidates_by_length_bucket(
     scored_rows: list[dict[str, Any]],
     candidate_count: int,
 ) -> list[dict[str, Any]]:
+    if candidate_count <= 0 or not scored_rows:
+        return []
+
     selection_cfg = _get(cfg, "data.length_bucket_selection", {})
     if not isinstance(selection_cfg, Mapping) or not bool(selection_cfg.get("enabled", True)):
         return scored_rows[:candidate_count]
