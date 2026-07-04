@@ -6,6 +6,7 @@ from collections import Counter
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -398,6 +399,12 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values)
 
 
+def _format_metric_value(value: float | None) -> str | None:
+    if value is None:
+        return None
+    return f"{float(value):.6g}"
+
+
 def _score_eval_metrics(
     *,
     cfg: Mapping[str, Any],
@@ -435,7 +442,9 @@ def _score_eval_metrics(
         if requires_reference and any(not str(row.get("ref", "")).strip() for row in metric_rows):
             raise SystemExit(f"metric {metric_id} requires references, but some eval rows have empty target")
 
-        with progress_context("eval metric", metric=metric_id, backend=backend, rows=len(metric_rows)):
+        metric_started = time.perf_counter()
+        progress("eval metric start", metric=metric_id, backend=backend, rows=len(metric_rows))
+        try:
             if backend == "sacrebleu":
                 try:
                     import sacrebleu
@@ -456,6 +465,14 @@ def _score_eval_metrics(
                     "score": score,
                     "higher_is_better": True,
                 }
+                progress(
+                    "eval metric done",
+                    metric=metric_id,
+                    backend=backend,
+                    rows=len(metric_rows),
+                    elapsed_s=f"{time.perf_counter() - metric_started:.1f}",
+                    score=_format_metric_value(score),
+                )
                 continue
 
             if backend == "comet":
@@ -468,12 +485,21 @@ def _score_eval_metrics(
                 )
                 for row, score in zip(score_rows, scores):
                     row["scores"][metric_id] = float(score)
+                mean_score = _mean(scores)
                 summary[metric_id] = {
                     "backend": backend,
                     "model": str(metric.get("model", "")).strip(),
-                    "mean": _mean(scores),
+                    "mean": mean_score,
                     "higher_is_better": True,
                 }
+                progress(
+                    "eval metric done",
+                    metric=metric_id,
+                    backend=backend,
+                    rows=len(metric_rows),
+                    elapsed_s=f"{time.perf_counter() - metric_started:.1f}",
+                    mean=_format_metric_value(mean_score),
+                )
                 continue
 
             if backend == "metricx":
@@ -489,13 +515,32 @@ def _score_eval_metrics(
                 )
                 for row, score in zip(score_rows, scores):
                     row["scores"][metric_id] = float(score)
+                mean_score = _mean(scores)
                 summary[metric_id] = {
                     "backend": backend,
                     "model": str(metric.get("model", "")).strip(),
-                    "mean": _mean(scores),
+                    "mean": mean_score,
                     "higher_is_better": False,
                 }
+                progress(
+                    "eval metric done",
+                    metric=metric_id,
+                    backend=backend,
+                    rows=len(metric_rows),
+                    elapsed_s=f"{time.perf_counter() - metric_started:.1f}",
+                    mean=_format_metric_value(mean_score),
+                )
                 continue
+        except BaseException as exc:
+            progress(
+                "eval metric failed",
+                metric=metric_id,
+                backend=backend,
+                rows=len(metric_rows),
+                elapsed_s=f"{time.perf_counter() - metric_started:.1f}",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            raise
 
         raise SystemExit(f"unsupported eval metric backend={backend!r}")
     return score_rows, summary
