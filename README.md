@@ -30,7 +30,7 @@ Runtime version notes:
 ### 3. Configure access
 
 ```sh
-huggingface-cli login
+python -c "from huggingface_hub import login; login()"
 wandb login
 
 export GEMINI_API_KEY="..."
