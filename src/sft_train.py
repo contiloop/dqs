@@ -16,6 +16,15 @@ from wandb_logging import configure_wandb_env, log_wandb_metrics
 
 
 IGNORE_INDEX = -100
+DEFAULT_TEXT_LORA_TARGET_MODULES = [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+]
 
 
 def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
@@ -180,6 +189,26 @@ def _linear_leaf_module_short_names(model: Any) -> list[str]:
     return sorted(target_names)
 
 
+def _contains_visual_module_name(name: str) -> bool:
+    parts = name.split(".")
+    return "visual" in parts or name.startswith("vision_")
+
+
+def _ensure_no_visual_trainable_parameters(model: Any) -> None:
+    visual_trainable = []
+    for name, parameter in model.named_parameters():
+        if getattr(parameter, "requires_grad", False) and _contains_visual_module_name(name):
+            visual_trainable.append(name)
+    if visual_trainable:
+        preview = ", ".join(visual_trainable[:8])
+        suffix = "" if len(visual_trainable) <= 8 else f", ... (+{len(visual_trainable) - 8} more)"
+        raise SystemExit(
+            "LoRA produced trainable visual parameters while training.train_vision_layers=false. "
+            "Use text-only training.lora.target_modules or set training.train_vision_layers=true. "
+            f"Examples: {preview}{suffix}"
+        )
+
+
 def _write_lora_target_audit(path: Path, model: Any, target_modules: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     trainable = []
@@ -209,7 +238,7 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
     target_modules: Any = lora_cfg.get("target_modules", "auto_discover_text_layers")
     if target_modules == "auto_discover_text_layers":
         if bool(_get(cfg, "model.is_vision_model", False)):
-            target_modules = "all-linear"
+            target_modules = DEFAULT_TEXT_LORA_TARGET_MODULES
         else:
             target_modules = _linear_leaf_module_short_names(model)
 
@@ -231,6 +260,8 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
         "finetune_mlp_modules": True,
     }
     model = _call_with_supported_kwargs(model_api.get_peft_model, peft_kwargs)
+    if not bool(training_cfg.get("train_vision_layers", False)):
+        _ensure_no_visual_trainable_parameters(model)
     _write_lora_target_audit(audit_dir / "lora_target_modules.json", model, target_modules)
     return model
 

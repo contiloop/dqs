@@ -35,7 +35,14 @@ training:
     bias: none
     use_rslora: false
     loftq_config: null
-    target_modules: auto_discover_text_layers
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
     modules_to_save: null
   train_vision_layers: false
   optimizer_resume_required: true
