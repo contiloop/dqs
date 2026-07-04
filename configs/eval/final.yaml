@@ -36,7 +36,7 @@ eval:
       model: Unbabel/XCOMET-XXL
       requires_reference: true
       python_env_var: COMET_PYTHON
-      batch_size: 8
+      batch_size: 16
     - id: metricx_24_hybrid_xxl
       backend: metricx
       model: google/metricx-24-hybrid-xxl-v2p6-bfloat16
