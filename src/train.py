@@ -1617,6 +1617,8 @@ def main() -> None:
         "teacher_accepted_rows": teacher_summary.get("teacher_accepted_rows", 0),
         "teacher_rejected_rows": teacher_summary.get("teacher_rejected_rows", 0),
         "teacher_shortfall_rows": teacher_summary.get("teacher_shortfall_rows", 0),
+        "teacher_label_counts": teacher_summary.get("teacher_label_counts", {}),
+        "teacher_label_ratios": teacher_summary.get("teacher_label_ratios", {}),
         "sft_rows": sft_summary.get("sft_rows", 0),
         "sft_dataset_path": sft_summary.get("sft_dataset_path"),
         "sft_training_global_step": sft_training_summary.get("global_step"),

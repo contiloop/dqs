@@ -18,6 +18,7 @@ from progress import progress, progress_context
 
 
 TeacherLabel = Literal["no_change", "minor", "major", "critical", "invalid"]
+TEACHER_ACCEPTED_LABELS = ("no_change", "minor", "major", "critical")
 TeacherErrorType = Literal[
     "mistranslation",
     "omission",
@@ -407,6 +408,25 @@ def _teacher_rejection_counts(rejected: list[dict[str, Any]]) -> dict[str, dict[
     }
 
 
+def _teacher_label_summary(accepted: list[dict[str, Any]]) -> dict[str, dict[str, int | float]]:
+    counts = {
+        label: 0
+        for label in TEACHER_ACCEPTED_LABELS
+    }
+    for row in accepted:
+        label = str(row.get("teacher_label", "unknown"))
+        counts[label] = counts.get(label, 0) + 1
+    total = len(accepted)
+    ratios = {
+        label: (count / total if total > 0 else 0.0)
+        for label, count in counts.items()
+    }
+    return {
+        "label_counts": dict(sorted(counts.items())),
+        "label_ratios": dict(sorted(ratios.items())),
+    }
+
+
 def _run_teacher_batch_inputs(
     *,
     batch_inputs: list[tuple[int, dict[str, Any], str, str, list[dict[str, Any]], set[str]]],
@@ -666,6 +686,7 @@ def run_teacher_generation(
     write_jsonl(subset_dir / "golden_pairs.jsonl", accepted)
     shortfall = max(0, target - len(accepted))
     rejection_counts = _teacher_rejection_counts(rejected)
+    label_summary = _teacher_label_summary(accepted)
     summary = {
         "teacher_candidate_rows": len(candidates),
         "teacher_candidate_batches": len(batches),
@@ -674,6 +695,8 @@ def run_teacher_generation(
         "teacher_skipped_candidate_rows": max(0, len(candidates) - requested_candidate_rows),
         "teacher_accepted_rows": len(accepted),
         "teacher_rejected_rows": len(rejected),
+        "teacher_label_counts": label_summary["label_counts"],
+        "teacher_label_ratios": label_summary["label_ratios"],
         "teacher_reject_reason_counts": rejection_counts["reject_reason_counts"],
         "teacher_reject_flag_counts": rejection_counts["reject_flag_counts"],
         "teacher_target_rows": target,

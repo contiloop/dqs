@@ -315,8 +315,9 @@ counts and eval metric means. `eval_records.jsonl` keeps the row-level canonical
 eval result, including prompt/model metadata, generation output, filter label,
 and sentence-level metric scores. Set `logging.save_all_step_artifacts=true` to
 also keep split eval request, translation, filter, and score JSONL files.
-Subset W&B curves include filtered rows, rows blocked from teacher selection by
-the student filter, and the mean QE score of selected teacher candidates.
+Subset W&B curves are kept compact: filtered rows, rows blocked from teacher
+selection by the student filter, selected-candidate mean QE, SFT rows, and
+teacher accepted-label ratios.
 
 ### 8. Upload run artifacts
 

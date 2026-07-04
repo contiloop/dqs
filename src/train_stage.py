@@ -300,7 +300,6 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         subset_record["summary"] = _read_json_if_exists(_front_stage_summary_path(cfg, subset_idx))
         metric_step = _metric_step_from_subset_summary(subset_record["summary"])
         subset_metrics = subset_summary_payload(subset_record["summary"])
-        subset_metrics["stage/sft_scheduler_total_steps"] = sft_scheduler_total_steps
         log_wandb_metrics(cfg, subset_metrics, step=metric_step, job_type="train-stage", finish=True)
 
         if _should_eval_after_subset(

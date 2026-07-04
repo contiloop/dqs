@@ -14,7 +14,7 @@ from io_utils import read_jsonl
 from progress import progress_context
 from runtime_logging import configure_runtime_logging, quiet_third_party_output
 from text_tokenization import text_decode, text_token_ids, text_tokenizer
-from wandb_logging import configure_wandb_env, log_wandb_metrics
+from wandb_logging import configure_wandb_env
 
 
 configure_runtime_logging()
@@ -836,19 +836,6 @@ def run_sft_training(
                 "stage_state_path": stage_plan["path"],
             }
         )
-    log_wandb_metrics(
-        cfg,
-        {
-            "train/global_step": summary.get("global_step"),
-            "train/subset_idx": subset_idx,
-            "train/subset_sft_rows": len(tokenized_rows),
-            "train/subset_train_loss": summary.get("train_loss"),
-            "stage/subset_update_steps": summary.get("stage_subset_update_steps"),
-            "stage/scheduler_total_steps": summary.get("stage_scheduler_total_steps"),
-        },
-        step=summary.get("global_step") if isinstance(summary.get("global_step"), int) else None,
-        job_type="sft",
-    )
     summary_path = output_dir_obj / f"sft_training_summary_subset_{subset_idx:03d}.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return summary

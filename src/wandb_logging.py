@@ -170,20 +170,18 @@ def eval_metric_payload(summary: Mapping[str, Any], *, prefix: str) -> dict[str,
 
 
 def subset_summary_payload(summary: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "subset/index": summary.get("subset_idx"),
-        "subset/input_rows": summary.get("input_rows"),
-        "subset/student_rows": summary.get("student_rows"),
-        "subset/student_filter_pass_rows": summary.get("student_filter_pass_rows"),
-        "subset/student_filter_fail_rows": summary.get("student_filter_fail_rows"),
-        "subset/student_filter_fail_ratio": summary.get("student_filter_fail_ratio"),
         "subset/filtered_rows": summary.get("student_filter_fail_rows"),
         "subset/filter_blocked_selection_rows": summary.get("student_filter_blocked_selection_rows"),
         "subset/selected_for_teacher_rows": summary.get("selected_for_teacher_rows"),
         "subset/selected_qe_score_mean": summary.get("selected_qe_score_mean"),
-        "subset/teacher_accepted_rows": summary.get("teacher_accepted_rows"),
-        "subset/teacher_rejected_rows": summary.get("teacher_rejected_rows"),
-        "subset/teacher_shortfall_rows": summary.get("teacher_shortfall_rows"),
         "subset/sft_rows": summary.get("sft_rows"),
         "train/global_step": summary.get("sft_training_global_step"),
     }
+    teacher_label_ratios = summary.get("teacher_label_ratios", {})
+    if isinstance(teacher_label_ratios, Mapping):
+        for label, ratio in teacher_label_ratios.items():
+            if isinstance(ratio, (int, float)) and not isinstance(ratio, bool):
+                payload[f"subset/teacher_label_ratios/{label}"] = float(ratio)
+    return payload
