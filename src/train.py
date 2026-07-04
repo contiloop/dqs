@@ -992,6 +992,9 @@ def _select_for_teacher(
         out["qe_model"] = response["model"]
         scored_rows.append(out)
 
+    if not scored_rows:
+        return []
+
     target = int(_get(cfg, "data.teacher_target_per_subset", 0) or 0)
     if target <= 0:
         ratio = float(_get(cfg, "data.selection_ratio", 0.01) or 0.01)
@@ -1075,6 +1078,8 @@ def _quota_from_weights(total: int, weights: list[float]) -> list[int]:
     if total <= 0:
         return [0 for _ in weights]
     weight_sum = sum(weights)
+    if weight_sum <= 0:
+        return [0 for _ in weights]
     raw = [(total * weight / weight_sum) for weight in weights]
     quotas = [int(value) for value in raw]
     remainder = total - sum(quotas)
