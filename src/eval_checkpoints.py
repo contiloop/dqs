@@ -90,6 +90,8 @@ def _eval_cmd(
         cmd.extend(["--data-path", args.data_path])
     if args.limit is not None:
         cmd.extend(["--limit", str(args.limit)])
+    if args.metrics:
+        cmd.extend(["--metrics", args.metrics])
     if args.dry_run:
         cmd.append("--dry-run")
     if args.force:
@@ -186,6 +188,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-step", type=int, default=None)
     parser.add_argument("--end-step", type=int, default=None)
     parser.add_argument("--max-checkpoints", type=int, default=None)
+    parser.add_argument("--metrics", default=None)
     parser.add_argument("--override", action="append", default=[])
     parser.add_argument("--eval-override", action="append", default=[])
     parser.add_argument("--dry-run", action="store_true")

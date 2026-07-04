@@ -32,6 +32,30 @@ def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
     return cursor
 
 
+def _filter_metric_config(cfg: dict[str, Any], metric_ids: str | None) -> None:
+    if not metric_ids:
+        return
+    selected = [item.strip() for item in metric_ids.split(",") if item.strip()]
+    if not selected:
+        return
+    eval_cfg = cfg.get("eval")
+    if not isinstance(eval_cfg, dict):
+        raise SystemExit("eval config must be a mapping")
+    metrics = eval_cfg.get("metrics", [])
+    if not isinstance(metrics, list):
+        raise SystemExit("eval.metrics must be a list")
+    by_id = {
+        str(metric.get("id", metric.get("backend", ""))).strip(): metric
+        for metric in metrics
+        if isinstance(metric, Mapping)
+    }
+    missing = [metric_id for metric_id in selected if metric_id not in by_id]
+    if missing:
+        available = ", ".join(sorted(by_id))
+        raise SystemExit(f"unknown eval metric id(s): {', '.join(missing)}; available: {available}")
+    eval_cfg["metrics"] = [by_id[metric_id] for metric_id in selected]
+
+
 def _read_parquet_rows(path: Path) -> list[dict[str, Any]]:
     try:
         import pyarrow as pa
@@ -554,6 +578,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-path", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--metrics", default=None, help="Comma-separated eval metric ids to run.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--skip-wandb-log", action="store_true")
@@ -563,6 +588,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     cfg = compose_config(args.config, overrides=args.override)
+    _filter_metric_config(cfg, args.metrics)
     output_dir = Path(args.output_dir or str(_get(cfg, "eval.output_dir")))
     output_dir.mkdir(parents=True, exist_ok=True)
     save_effective_config(output_dir / "effective_config.yaml", cfg)

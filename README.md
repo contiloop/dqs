@@ -241,6 +241,12 @@ Run the heavyweight final evaluation profile on `data/test.jsonl`:
 make eval EVAL_PROFILE=final
 ```
 
+Run only selected metrics:
+
+```sh
+make eval EVAL_PROFILE=final EVAL_METRICS=metricx_24_hybrid_xxl
+```
+
 Run final evaluation for every saved checkpoint:
 
 ```sh

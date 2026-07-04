@@ -178,6 +178,8 @@ def _eval_cmd(
         cmd.extend(["--model-path", args.eval_model_path])
     if args.eval_limit is not None:
         cmd.extend(["--limit", str(args.eval_limit)])
+    if args.eval_metrics:
+        cmd.extend(["--metrics", args.eval_metrics])
     if args.eval_dry_run:
         cmd.append("--dry-run")
     if args.eval_force:
@@ -364,6 +366,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-model-path", default=None)
     parser.add_argument("--eval-output-dir", default=None)
     parser.add_argument("--eval-limit", type=int, default=None)
+    parser.add_argument("--eval-metrics", default=None)
     parser.add_argument("--eval-dry-run", action="store_true")
     parser.add_argument("--eval-force", action="store_true")
     parser.add_argument("--eval-on-final-subset", action="store_true")

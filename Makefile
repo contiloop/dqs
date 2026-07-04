@@ -44,6 +44,7 @@ EVAL_DATA_PATH ?=
 EVAL_MODEL_PATH ?=
 EVAL_OUTPUT_DIR ?=
 EVAL_LIMIT ?=
+EVAL_METRICS ?=
 EVAL_DRY_RUN ?= 0
 EVAL_FORCE ?= 0
 EVAL_EVERY_N_SUBSETS ?= 1
@@ -416,6 +417,7 @@ train-stage:
 		$(if $(EVAL_MODEL_PATH),--eval-model-path "$(EVAL_MODEL_PATH)",) \
 		$(if $(EVAL_OUTPUT_DIR),--eval-output-dir "$(EVAL_OUTPUT_DIR)",) \
 		$(if $(EVAL_LIMIT),--eval-limit "$(EVAL_LIMIT)",) \
+		$(if $(EVAL_METRICS),--eval-metrics "$(EVAL_METRICS)",) \
 		$(foreach override,$(TRAIN_OVERRIDES),--override "$(override)") \
 		$(foreach override,$(EVAL_OVERRIDES),--eval-override "$(override)") \
 		$(if $(filter 1,$(TRAIN_DRY_RUN)),--dry-run,) \
@@ -436,6 +438,7 @@ eval:
 		$(if $(EVAL_MODEL_PATH),--model-path "$(EVAL_MODEL_PATH)",) \
 		$(if $(EVAL_OUTPUT_DIR),--output-dir "$(EVAL_OUTPUT_DIR)",) \
 		$(if $(EVAL_LIMIT),--limit "$(EVAL_LIMIT)",) \
+		$(if $(EVAL_METRICS),--metrics "$(EVAL_METRICS)",) \
 		$(foreach override,$(EVAL_OVERRIDES),--override "$(override)") \
 		$(if $(filter 1,$(EVAL_DRY_RUN)),--dry-run,) \
 		$(if $(filter 1,$(EVAL_FORCE)),--force,)
@@ -452,6 +455,7 @@ eval-checkpoints:
 		$(if $(EVAL_CHECKPOINT_OUTPUT_DIR),--output-dir "$(EVAL_CHECKPOINT_OUTPUT_DIR)",) \
 		$(if $(EVAL_DATA_PATH),--data-path "$(EVAL_DATA_PATH)",) \
 		$(if $(EVAL_LIMIT),--limit "$(EVAL_LIMIT)",) \
+		$(if $(EVAL_METRICS),--metrics "$(EVAL_METRICS)",) \
 		$(if $(EVAL_CHECKPOINT_START_STEP),--start-step "$(EVAL_CHECKPOINT_START_STEP)",) \
 		$(if $(EVAL_CHECKPOINT_END_STEP),--end-step "$(EVAL_CHECKPOINT_END_STEP)",) \
 		$(if $(EVAL_CHECKPOINT_MAX),--max-checkpoints "$(EVAL_CHECKPOINT_MAX)",) \
