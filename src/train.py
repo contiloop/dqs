@@ -66,9 +66,17 @@ def _cleanup_compact_subset_artifacts(cfg: Mapping[str, Any], subset_dir: Path) 
     if _save_all_step_artifacts(cfg):
         return
     rel_paths: list[str] = []
-    if (subset_dir / "qe_scores.jsonl").exists():
+    if (subset_dir / "student_records.jsonl").exists():
         rel_paths.extend(
             [
+                "input.jsonl",
+                "student_translations.jsonl",
+                "student_filtered.jsonl",
+                "qe_scores.jsonl",
+                "selected_for_teacher.jsonl",
+                "filter_blocked_selection.jsonl",
+                "runtime_io/infer-student.input.jsonl",
+                "runtime_io/infer-student.output.jsonl",
                 "runtime_io/qe-selection.input.jsonl",
                 "runtime_io/qe-selection.output.jsonl",
             ]
@@ -847,6 +855,16 @@ def _run_qe_selection(
         write_jsonl(subset_dir / "qe_scores.jsonl", [])
         write_jsonl(subset_dir / "filter_blocked_selection.jsonl", [])
         write_jsonl(subset_dir / "selected_for_teacher.jsonl", [])
+        write_jsonl(
+            subset_dir / "student_records.jsonl",
+            _student_records(
+                filter_rows=filter_rows,
+                qe_requests=[],
+                qe_responses=[],
+                selected_rows=[],
+                blocked_selection=[],
+            ),
+        )
         return []
 
     qe_responses = _score_qe_requests(cfg=cfg, qe_requests=qe_requests)
@@ -882,6 +900,16 @@ def _run_qe_selection(
         encoding="utf-8",
     )
     write_jsonl(subset_dir / "selected_for_teacher.jsonl", selected)
+    write_jsonl(
+        subset_dir / "student_records.jsonl",
+        _student_records(
+            filter_rows=filter_rows,
+            qe_requests=qe_requests,
+            qe_responses=qe_responses,
+            selected_rows=selected,
+            blocked_selection=blocked_selection,
+        ),
+    )
     if not selected:
         raise SystemExit(
             "teacher selection produced zero clean candidates after student filtering; "
@@ -1076,6 +1104,87 @@ def _qe_score_records(
                 "qe_status": response.get("status", "missing"),
                 "qe_score": None if raw_score is None else float(raw_score),
                 "qe_error": response.get("error"),
+            }
+        )
+    return records
+
+
+def _student_records(
+    *,
+    filter_rows: list[dict[str, Any]],
+    qe_requests: list[dict[str, Any]],
+    qe_responses: list[dict[str, Any]],
+    selected_rows: list[dict[str, Any]],
+    blocked_selection: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    qe_request_by_row_id = {str(row.get("row_id", "")): row for row in qe_requests}
+    qe_response_by_row_id = {str(row.get("row_id", "")): row for row in qe_responses}
+    selected_by_id = {str(row.get("id", "")): row for row in selected_rows}
+    blocked_by_id = {str(row.get("id", "")): row for row in blocked_selection}
+
+    records: list[dict[str, Any]] = []
+    for row in filter_rows:
+        row_id = str(row.get("id", ""))
+        qe_request = qe_request_by_row_id.get(row_id)
+        qe_response = qe_response_by_row_id.get(row_id)
+        selected = selected_by_id.get(row_id)
+        blocked = blocked_by_id.get(row_id)
+
+        qe_payload = None
+        if qe_request is not None or qe_response is not None:
+            raw_score = None if qe_response is None else qe_response.get("score")
+            qe_payload = {
+                "backend": (qe_response or qe_request or {}).get("backend"),
+                "model": (qe_response or qe_request or {}).get("model"),
+                "requires_reference": bool(qe_request is not None and "ref" in qe_request),
+                "status": "missing" if qe_response is None else qe_response.get("status", "missing"),
+                "score": None if raw_score is None else float(raw_score),
+                "error": None if qe_response is None else qe_response.get("error"),
+                "request_id": None if qe_request is None else qe_request.get("id"),
+                "order_idx": None if qe_request is None else qe_request.get("order_idx"),
+            }
+
+        selection_payload = {
+            "selected_for_teacher": selected is not None,
+            "selection_rank": None if selected is None else selected.get("selection_rank"),
+            "selection_rule": None if selected is None else selected.get("selection_rule"),
+            "length_bucket_idx": None if selected is None else selected.get("length_bucket_idx"),
+            "length_bucket": None if selected is None else selected.get("length_bucket"),
+            "blocked_by_filter": blocked is not None,
+            "blocked_selection_rank": None if blocked is None else blocked.get("selection_rank"),
+            "blocked_selection_rule": None if blocked is None else blocked.get("selection_rule"),
+            "blocked_length_bucket_idx": None if blocked is None else blocked.get("length_bucket_idx"),
+            "blocked_length_bucket": None if blocked is None else blocked.get("length_bucket"),
+        }
+
+        records.append(
+            {
+                "id": row.get("id"),
+                "source": row.get("source", ""),
+                "target": row.get("target"),
+                "metadata": row.get("metadata", {}),
+                "source_tokens": row.get("source_tokens"),
+                "student": {
+                    "translation": row.get("student_translation", ""),
+                    "status": row.get("student_status", "failed"),
+                    "error": row.get("student_error"),
+                    "finish_reason": row.get("finish_reason"),
+                    "generated_token_count": row.get("generated_token_count", 0),
+                    "request_id": row.get("request_id"),
+                    "order_idx": row.get("order_idx"),
+                    "prompt_template_id": row.get("prompt_template_id"),
+                    "prompt_template_group": row.get("prompt_template_group"),
+                    "prompt_template_hash": row.get("prompt_template_hash"),
+                    "chat_template_applied": row.get("chat_template_applied"),
+                },
+                "filter": {
+                    "label": row.get("degeneration_label"),
+                    "flags": row.get("degeneration_flags", []),
+                    "enabled": row.get("degeneration_filter_enabled"),
+                    "basic_validity_only": row.get("degeneration_basic_validity_only"),
+                },
+                "qe": qe_payload,
+                "selection": selection_payload,
             }
         )
     return records

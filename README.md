@@ -221,13 +221,8 @@ Default runs keep compact, resume-safe subset artifacts:
 ```text
 front_stage_summary.json
 phase_state.json
-input.jsonl
-student_translations.jsonl
-student_filtered.jsonl
+student_records.jsonl
 student_filter_summary.json
-qe_scores.jsonl
-selected_for_teacher.jsonl
-filter_blocked_selection.jsonl
 teacher_artifacts.jsonl
 teacher_summary.json
 golden_pairs.jsonl
@@ -235,11 +230,13 @@ sft_train.jsonl
 ```
 
 The compact files still preserve the full non-duplicated training trace:
-student generations, filter labels, QE scores for every eligible candidate,
-teacher request/raw/parsed/rejected records, accepted golden pairs, and SFT rows.
+input sources, student generations, filter labels, QE scores for every eligible
+candidate, teacher-selection flags, teacher request/raw/parsed/rejected records,
+accepted golden pairs, and SFT rows.
 Set `logging.save_all_step_artifacts=true` only when you also want split debug
-files such as raw QE runtime I/O or separate teacher request/response JSONL
-files.
+files such as raw vLLM/QE runtime I/O, `input.jsonl`,
+`student_translations.jsonl`, `student_filtered.jsonl`, `qe_scores.jsonl`,
+`selected_for_teacher.jsonl`, or separate teacher request/response JSONL files.
 
 Compact an existing run before upload:
 

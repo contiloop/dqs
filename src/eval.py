@@ -614,6 +614,7 @@ def _build_eval_records(
     records: list[dict[str, Any]] = []
     for row in filtered_rows:
         out = dict(row)
+        out.pop("prompt", None)
         out["scores"] = scores_by_id.get(str(row.get("id", "")), {})
         records.append(out)
     return records

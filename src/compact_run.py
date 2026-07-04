@@ -12,6 +12,21 @@ from config_loader import compose_config
 
 SUBSET_COMPACT_RULES = (
     (
+        "student_records.jsonl",
+        (
+            "input.jsonl",
+            "student_translations.jsonl",
+            "student_filtered.jsonl",
+            "qe_scores.jsonl",
+            "selected_for_teacher.jsonl",
+            "filter_blocked_selection.jsonl",
+            "runtime_io/infer-student.input.jsonl",
+            "runtime_io/infer-student.output.jsonl",
+            "runtime_io/qe-selection.input.jsonl",
+            "runtime_io/qe-selection.output.jsonl",
+        ),
+    ),
+    (
         "qe_scores.jsonl",
         (
             "runtime_io/qe-selection.input.jsonl",
