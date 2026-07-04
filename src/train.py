@@ -954,6 +954,19 @@ def _student_filter_blocked_selection_summary(
     }
 
 
+def _mean_qe_score(rows: list[dict[str, Any]]) -> float | None:
+    scores: list[float] = []
+    for row in rows:
+        value = row.get("qe_score")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            scores.append(float(value))
+    if not scores:
+        return None
+    return sum(scores) / len(scores)
+
+
 def _read_json_if_exists(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -1600,6 +1613,7 @@ def main() -> None:
             {},
         ),
         "selected_for_teacher_rows": len(selected_rows),
+        "selected_qe_score_mean": _mean_qe_score(selected_rows),
         "teacher_accepted_rows": teacher_summary.get("teacher_accepted_rows", 0),
         "teacher_rejected_rows": teacher_summary.get("teacher_rejected_rows", 0),
         "teacher_shortfall_rows": teacher_summary.get("teacher_shortfall_rows", 0),
