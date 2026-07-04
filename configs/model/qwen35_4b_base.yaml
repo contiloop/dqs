@@ -6,4 +6,6 @@ model:
   is_vision_model: true
   trust_remote_code: true
   use_hf_chat_template: false
+  enable_thinking: false
+  require_thinking_control: false
   tokenizer_revision: main

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import random
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -128,25 +128,29 @@ def _apply_chat_template(
     if system_prompt.strip():
         messages.append({"role": "system", "content": system_prompt.strip()})
     messages.append({"role": "user", "content": user_prompt})
+    enable_thinking = bool(model_cfg.get("enable_thinking", False))
+    require_thinking_control = bool(model_cfg.get("require_thinking_control", False))
+    chat_template_kwargs = {
+        "tokenize": False,
+        "add_generation_prompt": True,
+    }
     try:
-        rendered = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,
+        signature = inspect.signature(tokenizer.apply_chat_template)
+        accepts_enable_thinking = (
+            "enable_thinking" in signature.parameters
+            or any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values())
         )
-    except TypeError:
-        rendered = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
+    except (TypeError, ValueError):
+        accepts_enable_thinking = True
+    if accepts_enable_thinking:
+        chat_template_kwargs["enable_thinking"] = enable_thinking
+    elif require_thinking_control:
+        raise PromptError(
+            "model.enable_thinking is configured, but tokenizer.apply_chat_template "
+            "does not accept enable_thinking"
         )
+    rendered = tokenizer.apply_chat_template(messages, **chat_template_kwargs)
     text = str(rendered)
-    text = re.sub(r"\n<think>\s*</think>\s*$", "\n", text)
-    for suffix in ("\n<think>\n", "\n<think>\n\n"):
-        if text.endswith(suffix):
-            text = text[: -len(suffix)] + "\n"
-            break
     return text, True
 
 

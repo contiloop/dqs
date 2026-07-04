@@ -53,6 +53,7 @@ data:
     teacher_enabled: true
     student_require_valid_output: true
     reject_repetition: true
+    reject_thinking_trace: true
     reject_foreign_passthrough: true
     reject_english_passthrough: true
     reject_wrong_script_heavy: true

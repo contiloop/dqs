@@ -16,6 +16,10 @@ _WORD_RE = re.compile(r"[A-Za-z0-9가-힣\u00C0-\u024F]+")
 _CLAUSE_SPLIT_RE = re.compile(r"[.!?。！？\n;；,，]+")
 _PUNCT_SPACE_RE = re.compile(r"[^0-9A-Za-z가-힣\u00C0-\u024F]+")
 _SENTENCE_FINAL_RE = re.compile(r"[.!?。！？…\"')\]”’]$")
+_THINKING_TRACE_RE = re.compile(
+    r"<\s*/?\s*think\s*>|\bwe need to translate\b|\blet'?s understand\b|\bpossible translation\b",
+    re.IGNORECASE,
+)
 _CHAR_REPEAT_PATTERNS: dict[int, re.Pattern[str]] = {}
 _ENGLISH_SENTENCE_MARKERS = {
     "am",
@@ -548,6 +552,8 @@ def classify_student_output(
 
     if _cfg_bool(config, "reject_encoding_replchar", True) and "�" in text:
         flags.append("encoding_replchar")
+    if _cfg_bool(config, "reject_thinking_trace", True) and _THINKING_TRACE_RE.search(text):
+        flags.append("thinking_trace")
     if _cfg_bool(config, "reject_repetition", True):
         repetition_flags = _repetition_flags(source, text, config)
         if repetition_flags:

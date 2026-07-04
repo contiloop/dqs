@@ -61,52 +61,52 @@
       "completion_token_count": 1501,
       "id": "smoke_max_context_000",
       "max_seq_length": 2908,
-      "prompt_token_count": 1394,
-      "remaining_tokens": 13,
+      "prompt_token_count": 1398,
+      "remaining_tokens": 9,
       "source_tokens": 1280,
       "supervised_token_count": 1501,
       "target_text_tokens": 1500,
       "template_id": "instruct_tem_005",
-      "total_token_count": 2895
+      "total_token_count": 2899
     },
     {
       "chat_template_applied": true,
       "completion_token_count": 1501,
       "id": "smoke_max_context_001",
       "max_seq_length": 2908,
-      "prompt_token_count": 1390,
-      "remaining_tokens": 17,
+      "prompt_token_count": 1394,
+      "remaining_tokens": 13,
       "source_tokens": 1280,
       "supervised_token_count": 1501,
       "target_text_tokens": 1500,
       "template_id": "instruct_tem_004",
-      "total_token_count": 2891
+      "total_token_count": 2895
     },
     {
       "chat_template_applied": true,
       "completion_token_count": 1501,
       "id": "smoke_max_context_002",
       "max_seq_length": 2908,
-      "prompt_token_count": 1379,
-      "remaining_tokens": 28,
+      "prompt_token_count": 1383,
+      "remaining_tokens": 24,
       "source_tokens": 1280,
       "supervised_token_count": 1501,
       "target_text_tokens": 1500,
       "template_id": "instruct_tem_002",
-      "total_token_count": 2880
+      "total_token_count": 2884
     },
     {
       "chat_template_applied": true,
       "completion_token_count": 1501,
       "id": "smoke_max_context_003",
       "max_seq_length": 2908,
-      "prompt_token_count": 1375,
-      "remaining_tokens": 32,
+      "prompt_token_count": 1379,
+      "remaining_tokens": 28,
       "source_tokens": 1280,
       "supervised_token_count": 1501,
       "target_text_tokens": 1500,
       "template_id": "instruct_tem_003",
-      "total_token_count": 2876
+      "total_token_count": 2880
     }
   ],
   "max_input_tokens": 1280,
