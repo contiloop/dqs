@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from config_loader import compose_config
+from progress import progress, progress_context
 from runtime_logging import configure_runtime_logging
 from train import (
     TRAIN_PHASES,
@@ -244,6 +245,14 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         "subsets": [],
     }
     _write_stage_summary(summary_path, summary)
+    progress(
+        "stage start",
+        run=_get(cfg, "run.id"),
+        start_subset=start_subset,
+        end_subset_exclusive=stage_end,
+        subset_size=subset_size,
+        eval_every_n_subsets=args.eval_every_n_subsets,
+    )
 
     start_from_phase_used = False
     for subset_idx in range(start_subset, stage_end):
@@ -256,6 +265,7 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
             subset_record["summary_path"] = str(_front_stage_summary_path(cfg, subset_idx))
             summary["subsets"].append(subset_record)
             _write_stage_summary(summary_path, summary)
+            progress("stage subset skip", subset=f"subset_{subset_idx:03d}", reason="completed")
             continue
 
         start_from_phase = None
@@ -271,7 +281,8 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         )
         subset_record["train_command"] = " ".join(train_cmd)
         try:
-            subprocess.run(train_cmd, check=True)
+            with progress_context("stage subset", subset=f"subset_{subset_idx:03d}"):
+                subprocess.run(train_cmd, check=True)
         except subprocess.CalledProcessError as exc:
             subset_record["status"] = "failed"
             subset_record["error"] = f"train exited with code {exc.returncode}"
@@ -299,7 +310,8 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
             eval_cmd = _eval_cmd(cfg=cfg, args=args, subset_idx=subset_idx)
             subset_record["eval_command"] = " ".join(eval_cmd)
             try:
-                subprocess.run(eval_cmd, check=True)
+                with progress_context("stage eval", subset=f"subset_{subset_idx:03d}", profile=args.eval_profile):
+                    subprocess.run(eval_cmd, check=True)
             except subprocess.CalledProcessError as exc:
                 subset_record["eval_status"] = "failed"
                 subset_record["eval_error"] = f"eval exited with code {exc.returncode}"
@@ -327,6 +339,7 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
 
     summary["status"] = "completed"
     _write_stage_summary(summary_path, summary)
+    progress("stage done", run=_get(cfg, "run.id"), subsets=len(summary["subsets"]))
     return summary
 
 

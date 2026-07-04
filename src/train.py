@@ -17,6 +17,7 @@ from typing import Any, Mapping
 from config_loader import compose_config, config_hash, save_effective_config
 from degeneration_filter import classify_student_output
 from io_utils import read_jsonl, write_jsonl
+from progress import progress, progress_context
 from prompting import load_student_templates, render_student_prompt
 from qe_score import comet_scores
 from runtime_logging import configure_runtime_logging
@@ -196,32 +197,34 @@ def _run_tracked_phase(
     phase: str,
     func: Any,
 ) -> Any:
-    _write_phase_state(
-        cfg=cfg,
-        subset_dir=subset_dir,
-        subset_idx=subset_idx,
-        phase=phase,
-        status="running",
-    )
-    try:
-        result = func()
-    except BaseException as exc:
+    event = f"subset_{subset_idx:03d}/{phase}"
+    with progress_context(event, run=_get(cfg, "run.id")):
         _write_phase_state(
             cfg=cfg,
             subset_dir=subset_dir,
             subset_idx=subset_idx,
             phase=phase,
-            status="failed",
-            error=f"{type(exc).__name__}: {exc}",
+            status="running",
         )
-        raise
-    _write_phase_state(
-        cfg=cfg,
-        subset_dir=subset_dir,
-        subset_idx=subset_idx,
-        phase=phase,
-        status="phase_completed",
-    )
+        try:
+            result = func()
+        except BaseException as exc:
+            _write_phase_state(
+                cfg=cfg,
+                subset_dir=subset_dir,
+                subset_idx=subset_idx,
+                phase=phase,
+                status="failed",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            raise
+        _write_phase_state(
+            cfg=cfg,
+            subset_dir=subset_dir,
+            subset_idx=subset_idx,
+            phase=phase,
+            status="phase_completed",
+        )
     return result
 
 
@@ -484,6 +487,7 @@ def _validated_existing_vllm_output_or_none(
 
 def _run_vllm(request_path: Path, output_path: Path, *, force: bool) -> list[dict[str, Any]]:
     requests = read_jsonl(request_path)
+    progress("vllm dispatch", requests=len(requests), input=request_path, output=output_path)
     if output_path.exists() and output_path.stat().st_size > 0 and not force:
         normalized = _validated_existing_vllm_output_or_none(
             requests=requests,
@@ -514,7 +518,8 @@ def _run_vllm(request_path: Path, output_path: Path, *, force: bool) -> list[dic
         "--output",
         str(output_path),
     ]
-    subprocess.run(cmd, check=True)
+    with progress_context("vllm subprocess", requests=len(requests)):
+        subprocess.run(cmd, check=True)
     responses = read_jsonl(output_path)
     return _validate_or_raise_vllm_outputs(
         requests=requests,
@@ -617,7 +622,8 @@ def _run_vllm_part(input_path: Path, output_path: Path, gpu_ids: list[int]) -> l
         "--output",
         str(output_path),
     ]
-    subprocess.run(cmd, check=True, env=env)
+    with progress_context("vllm shard", gpus=",".join(str(gpu_id) for gpu_id in gpu_ids), input=input_path):
+        subprocess.run(cmd, check=True, env=env)
     return read_jsonl(output_path)
 
 
@@ -1211,6 +1217,14 @@ def main() -> None:
     subset_dir = _subset_root(cfg, subset_idx)
     runtime_dir = subset_dir / "runtime_io"
     runtime_dir.mkdir(parents=True, exist_ok=True)
+    progress(
+        "subset start",
+        run=_get(cfg, "run.id"),
+        subset=f"subset_{subset_idx:03d}",
+        resume=args.resume,
+        start_from=start_from_phase,
+        dry_run=args.dry_run,
+    )
 
     cfg_hash = config_hash(cfg)
     save_effective_config(_get(cfg, "paths.config_snapshot_path"), cfg)
@@ -1410,6 +1424,14 @@ def main() -> None:
     (subset_dir / "front_stage_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
+    )
+    progress(
+        "subset done",
+        run=_get(cfg, "run.id"),
+        subset=f"subset_{subset_idx:03d}",
+        selected_for_teacher=len(selected_rows),
+        sft_rows=summary.get("sft_rows"),
+        global_step=summary.get("sft_training_global_step"),
     )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
 

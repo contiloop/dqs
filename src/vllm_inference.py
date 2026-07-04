@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from io_utils import read_jsonl, write_jsonl
+from progress import progress, progress_context, progress_enabled
 from runtime_logging import configure_runtime_logging, quiet_enabled
 
 
@@ -111,7 +112,13 @@ def run(input_path: Path, output_path: Path) -> None:
     kwargs = _engine_kwargs(first)
     if not quiet_enabled():
         print(f"[vllm] loading model={model_name} kwargs={kwargs}", file=sys.stderr)
-    llm = LLM(model=model_name, **kwargs)
+    with progress_context(
+        "vllm load-model",
+        model=model_name,
+        requests=len(requests),
+        lora=bool(model_cfg.get("lora_adapter_path")),
+    ):
+        llm = LLM(model=model_name, **kwargs)
     try:
         lora_request = _lora_request(first)
         prompts = [str(row.get("prompt", "")) for row in requests]
@@ -126,7 +133,8 @@ def run(input_path: Path, output_path: Path) -> None:
         generate_kwargs: dict[str, Any] = {"sampling_params": first_param if uniform else params}
         if lora_request is not None:
             generate_kwargs["lora_request"] = lora_request
-        outputs = llm.generate(prompts, **generate_kwargs)
+        with progress_context("vllm generate", prompts=len(prompts)):
+            outputs = llm.generate(prompts, use_tqdm=progress_enabled(), **generate_kwargs)
         rows: list[dict[str, Any]] = []
         for idx, output in enumerate(outputs):
             request = requests[idx]
@@ -145,6 +153,7 @@ def run(input_path: Path, output_path: Path) -> None:
                 }
             )
         write_jsonl(output_path, rows)
+        progress("vllm output written", output=output_path, rows=len(rows))
     finally:
         try:
             del llm

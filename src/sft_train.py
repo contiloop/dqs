@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 
 from config_loader import compose_config
 from io_utils import read_jsonl
+from progress import progress_context
 from runtime_logging import configure_runtime_logging, quiet_third_party_output
 from text_tokenization import text_decode, text_token_ids, text_tokenizer
 from wandb_logging import configure_wandb_env, log_wandb_metrics
@@ -718,13 +719,15 @@ def run_sft_training(
         raise SystemExit(f"SFT dataset is empty: {dataset_path_obj}")
 
     max_seq_length = _default_max_seq_length(cfg)
-    model, tokenizer, model_api = _load_model_and_tokenizer(cfg, max_seq_length=max_seq_length)
-    tokenized_rows = _prepare_tokenized_rows(
-        tokenizer=tokenizer,
-        rows=rows,
-        cfg=cfg,
-        max_seq_length=max_seq_length,
-    )
+    with progress_context("sft load-model", subset=f"subset_{subset_idx:03d}", model=_get(cfg, "model.name_or_path")):
+        model, tokenizer, model_api = _load_model_and_tokenizer(cfg, max_seq_length=max_seq_length)
+    with progress_context("sft tokenize", subset=f"subset_{subset_idx:03d}", rows=len(rows), max_seq_length=max_seq_length):
+        tokenized_rows = _prepare_tokenized_rows(
+            tokenizer=tokenizer,
+            rows=rows,
+            cfg=cfg,
+            max_seq_length=max_seq_length,
+        )
     audit_dir = output_dir_obj / "audit"
     _write_mask_audit(audit_dir / f"sft_mask_audit_subset_{subset_idx:03d}.json", tokenizer, tokenized_rows)
     max_observed_length = max(len(row["input_ids"]) for row in tokenized_rows)
@@ -746,7 +749,8 @@ def run_sft_training(
         summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         return summary
 
-    model = _apply_lora_if_needed(cfg, model, model_api, audit_dir)
+    with progress_context("sft prepare-tuning", subset=f"subset_{subset_idx:03d}", mode=_get(cfg, "training.tuning_mode")):
+        model = _apply_lora_if_needed(cfg, model, model_api, audit_dir)
     from transformers import Trainer, set_seed
 
     set_seed(int(_get(cfg, "run.seed", 42) or 42))
@@ -792,7 +796,8 @@ def run_sft_training(
     if stage_plan:
         _write_sft_stage_state(Path(stage_plan["path"]), stage_plan)
     try:
-        train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        with progress_context("sft train", subset=f"subset_{subset_idx:03d}", rows=len(tokenized_rows), resume=resume_from_checkpoint):
+            train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         trainer.save_state()
         if force_save_checkpoint or stage_plan:
             _save_checkpoint_at_current_step(trainer)
@@ -804,7 +809,8 @@ def run_sft_training(
             failed_plan["actual_global_step"] = int(getattr(trainer.state, "global_step", 0))
             _write_sft_stage_state(Path(stage_plan["path"]), failed_plan)
         raise
-    artifacts = _save_model_artifacts(cfg, model, tokenizer, output_dir_obj)
+    with progress_context("sft save-artifacts", subset=f"subset_{subset_idx:03d}", output_dir=output_dir_obj):
+        artifacts = _save_model_artifacts(cfg, model, tokenizer, output_dir_obj)
     summary.update(
         {
             "dry_run": False,

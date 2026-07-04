@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from degeneration_filter import classify_student_output
 from io_utils import write_jsonl
+from progress import progress, progress_context
 
 
 TeacherLabel = Literal["no_change", "minor", "major", "critical", "invalid"]
@@ -414,6 +415,7 @@ def _run_teacher_batch_inputs(
         return {}
     results: dict[int, dict[str, Any]] = {}
     worker_count = min(max_workers, len(batch_inputs))
+    progress("teacher api-window start", batches=len(batch_inputs), workers=worker_count)
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [
             executor.submit(
@@ -429,9 +431,19 @@ def _run_teacher_batch_inputs(
             )
             for batch_idx, provider, system_prompt, user_prompt, _batch_rows, expected_ids in batch_inputs
         ]
+        completed = 0
         for future in as_completed(futures):
             result = future.result()
             results[int(result["batch_idx"])] = result
+            completed += 1
+            progress(
+                "teacher api-batch done",
+                batch=result.get("batch_idx"),
+                status=result.get("status"),
+                completed=f"{completed}/{len(futures)}",
+                provider=result.get("provider"),
+                model=result.get("model"),
+            )
     return results
 
 
@@ -514,6 +526,14 @@ def run_teacher_generation(
     rejected: list[dict[str, Any]] = []
     sorted_candidates = sorted(candidates, key=lambda row: int(row.get("selection_rank", 10**12)))
     batches = _chunks(sorted_candidates, batch_size)
+    progress(
+        "teacher start",
+        candidates=len(candidates),
+        batches=len(batches),
+        target=target,
+        batch_size=batch_size,
+        max_workers=max_workers,
+    )
     called_batches = 0
     requested_candidate_rows = 0
     batch_cursor = 0
@@ -545,13 +565,19 @@ def run_teacher_generation(
             batch_inputs.append((batch_idx, provider, system_prompt, user_prompt, batch_rows, expected_ids))
             batch_rows_by_idx[batch_idx] = batch_rows
 
-        results = _run_teacher_batch_inputs(
-            batch_inputs=batch_inputs,
-            max_workers=max_workers,
-            max_output_tokens=max_output_tokens,
-            temperature=temperature,
-            max_retries=max_retries,
-        )
+        with progress_context(
+            "teacher api-window",
+            start_batch=batch_cursor,
+            batches=len(batch_inputs),
+            accepted=len(accepted),
+        ):
+            results = _run_teacher_batch_inputs(
+                batch_inputs=batch_inputs,
+                max_workers=max_workers,
+                max_output_tokens=max_output_tokens,
+                temperature=temperature,
+                max_retries=max_retries,
+            )
         called_batches += len(batch_inputs)
         requested_candidate_rows += sum(len(batch_rows_by_idx[batch_idx]) for batch_idx in results)
 
@@ -591,6 +617,13 @@ def run_teacher_generation(
                 accepted.append(_accept_row(candidate, item=item, rank=len(accepted) + 1))
 
         batch_cursor += len(window_batches)
+        progress(
+            "teacher window processed",
+            requested=requested_candidate_rows,
+            accepted=len(accepted),
+            rejected=len(rejected),
+            target=target,
+        )
         if not refill_until_target:
             break
 
@@ -620,6 +653,13 @@ def run_teacher_generation(
     (subset_dir / "teacher_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
+    )
+    progress(
+        "teacher done",
+        accepted=len(accepted),
+        rejected=len(rejected),
+        shortfall=shortfall,
+        called_batches=called_batches,
     )
     return summary
 

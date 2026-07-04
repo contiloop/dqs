@@ -13,6 +13,7 @@ from config_loader import compose_config, save_effective_config
 from degeneration_filter import classify_student_output
 from io_utils import read_jsonl, write_jsonl
 from metricx_score import metricx_scores
+from progress import progress, progress_context
 from prompting import load_student_templates, render_student_prompt
 from qe_score import comet_scores
 from runtime_logging import configure_runtime_logging
@@ -304,7 +305,8 @@ def _run_generation(
         "--output",
         str(output_path),
     ]
-    subprocess.run(cmd, check=True)
+    with progress_context("eval generation subprocess", requests=len(requests)):
+        subprocess.run(cmd, check=True)
     responses = read_jsonl(output_path)
     valid, reason, normalized = _validate_generation_outputs(
         requests=requests,
@@ -433,66 +435,67 @@ def _score_eval_metrics(
         if requires_reference and any(not str(row.get("ref", "")).strip() for row in metric_rows):
             raise SystemExit(f"metric {metric_id} requires references, but some eval rows have empty target")
 
-        if backend == "sacrebleu":
-            try:
-                import sacrebleu
-            except ModuleNotFoundError as exc:
-                raise SystemExit("missing sacrebleu; run `make set` first") from exc
-            metric_name = str(metric.get("metric", metric_id)).strip().lower()
-            hypotheses = [row["mt"] for row in metric_rows]
-            references = [row["ref"] for row in metric_rows]
-            if metric_name == "bleu":
-                score = float(sacrebleu.corpus_bleu(hypotheses, [references]).score)
-            elif metric_name == "chrf":
-                score = float(sacrebleu.corpus_chrf(hypotheses, [references]).score)
-            else:
-                raise SystemExit(f"unsupported sacrebleu metric={metric_name!r}")
-            summary[metric_id] = {
-                "backend": backend,
-                "metric": metric_name,
-                "score": score,
-                "higher_is_better": True,
-            }
-            continue
+        with progress_context("eval metric", metric=metric_id, backend=backend, rows=len(metric_rows)):
+            if backend == "sacrebleu":
+                try:
+                    import sacrebleu
+                except ModuleNotFoundError as exc:
+                    raise SystemExit("missing sacrebleu; run `make set` first") from exc
+                metric_name = str(metric.get("metric", metric_id)).strip().lower()
+                hypotheses = [row["mt"] for row in metric_rows]
+                references = [row["ref"] for row in metric_rows]
+                if metric_name == "bleu":
+                    score = float(sacrebleu.corpus_bleu(hypotheses, [references]).score)
+                elif metric_name == "chrf":
+                    score = float(sacrebleu.corpus_chrf(hypotheses, [references]).score)
+                else:
+                    raise SystemExit(f"unsupported sacrebleu metric={metric_name!r}")
+                summary[metric_id] = {
+                    "backend": backend,
+                    "metric": metric_name,
+                    "score": score,
+                    "higher_is_better": True,
+                }
+                continue
 
-        if backend == "comet":
-            scores = comet_scores(
-                metric_rows,
-                model_name=str(metric.get("model", "")).strip(),
-                batch_size=int(metric.get("batch_size", 512) or 512),
-                python_env_var=str(metric.get("python_env_var", "COMET_PYTHON")),
-                include_reference=requires_reference,
-            )
-            for row, score in zip(score_rows, scores):
-                row["scores"][metric_id] = float(score)
-            summary[metric_id] = {
-                "backend": backend,
-                "model": str(metric.get("model", "")).strip(),
-                "mean": _mean(scores),
-                "higher_is_better": True,
-            }
-            continue
+            if backend == "comet":
+                scores = comet_scores(
+                    metric_rows,
+                    model_name=str(metric.get("model", "")).strip(),
+                    batch_size=int(metric.get("batch_size", 512) or 512),
+                    python_env_var=str(metric.get("python_env_var", "COMET_PYTHON")),
+                    include_reference=requires_reference,
+                )
+                for row, score in zip(score_rows, scores):
+                    row["scores"][metric_id] = float(score)
+                summary[metric_id] = {
+                    "backend": backend,
+                    "model": str(metric.get("model", "")).strip(),
+                    "mean": _mean(scores),
+                    "higher_is_better": True,
+                }
+                continue
 
-        if backend == "metricx":
-            scores = metricx_scores(
-                metric_rows,
-                model_name=str(metric.get("model", "")).strip(),
-                tokenizer=str(metric.get("tokenizer", "google/mt5-xl")).strip(),
-                max_input_length=int(metric.get("max_input_length", 1536) or 1536),
-                batch_size=int(metric.get("batch_size", 1) or 1),
-                python_env_var=str(metric.get("python_env_var", "METRICX_PYTHON")),
-                module=str(metric.get("module", "metricx24.predict")),
-                include_reference=requires_reference,
-            )
-            for row, score in zip(score_rows, scores):
-                row["scores"][metric_id] = float(score)
-            summary[metric_id] = {
-                "backend": backend,
-                "model": str(metric.get("model", "")).strip(),
-                "mean": _mean(scores),
-                "higher_is_better": False,
-            }
-            continue
+            if backend == "metricx":
+                scores = metricx_scores(
+                    metric_rows,
+                    model_name=str(metric.get("model", "")).strip(),
+                    tokenizer=str(metric.get("tokenizer", "google/mt5-xl")).strip(),
+                    max_input_length=int(metric.get("max_input_length", 1536) or 1536),
+                    batch_size=int(metric.get("batch_size", 1) or 1),
+                    python_env_var=str(metric.get("python_env_var", "METRICX_PYTHON")),
+                    module=str(metric.get("module", "metricx24.predict")),
+                    include_reference=requires_reference,
+                )
+                for row, score in zip(score_rows, scores):
+                    row["scores"][metric_id] = float(score)
+                summary[metric_id] = {
+                    "backend": backend,
+                    "model": str(metric.get("model", "")).strip(),
+                    "mean": _mean(scores),
+                    "higher_is_better": False,
+                }
+                continue
 
         raise SystemExit(f"unsupported eval metric backend={backend!r}")
     return score_rows, summary
@@ -521,36 +524,48 @@ def main() -> None:
 
     limit = args.limit if args.limit is not None else _get(cfg, "eval.limit")
     limit_int = None if limit is None else int(limit)
-    rows = _load_eval_rows(cfg, args.data_path, limit_int)
+    progress("eval start", profile=_get(cfg, "eval.profile"), output_dir=output_dir, dry_run=args.dry_run)
+    with progress_context("eval load-data", path=args.data_path or _get(cfg, "eval.dataset_path"), limit=limit_int):
+        rows = _load_eval_rows(cfg, args.data_path, limit_int)
     model_spec = _resolve_generation_model_spec(
         cfg,
         model_path=args.model_path,
         require_trained_artifact=not args.dry_run,
     )
-    requests = _build_eval_requests(cfg=cfg, rows=rows, model_spec=model_spec)
+    progress(
+        "eval model",
+        model=model_spec["model_path"],
+        lora_adapter=model_spec.get("lora_adapter_path"),
+    )
+    with progress_context("eval build-requests", rows=len(rows)):
+        requests = _build_eval_requests(cfg=cfg, rows=rows, model_spec=model_spec)
     request_path = output_dir / "eval_requests.jsonl"
     output_path = output_dir / "eval_outputs.jsonl"
     write_jsonl(request_path, requests)
-    responses = _run_generation(
-        requests=requests,
-        request_path=request_path,
-        output_path=output_path,
-        force=args.force,
-        dry_run=args.dry_run,
-    )
-    translations = _materialize_eval_translations(
-        rows=rows,
-        requests=requests,
-        responses=responses,
-    )
+    with progress_context("eval generate", requests=len(requests)):
+        responses = _run_generation(
+            requests=requests,
+            request_path=request_path,
+            output_path=output_path,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+    with progress_context("eval materialize", responses=len(responses)):
+        translations = _materialize_eval_translations(
+            rows=rows,
+            requests=requests,
+            responses=responses,
+        )
     write_jsonl(output_dir / "eval_translations.jsonl", translations)
-    filtered = _filter_eval_rows(cfg, translations)
+    with progress_context("eval label-filter", rows=len(translations)):
+        filtered = _filter_eval_rows(cfg, translations)
     write_jsonl(output_dir / "eval_filtered.jsonl", filtered)
-    score_rows, metric_summary = _score_eval_metrics(
-        cfg=cfg,
-        rows=filtered,
-        dry_run=args.dry_run,
-    )
+    with progress_context("eval score", rows=len(filtered)):
+        score_rows, metric_summary = _score_eval_metrics(
+            cfg=cfg,
+            rows=filtered,
+            dry_run=args.dry_run,
+        )
     write_jsonl(output_dir / "eval_scores.jsonl", score_rows)
 
     label_counts = Counter(str(row.get("degeneration_label", "unknown")) for row in filtered)
@@ -583,6 +598,14 @@ def main() -> None:
             job_type="eval",
             finish=True,
         )
+    progress(
+        "eval done",
+        profile=_get(cfg, "eval.profile"),
+        rows=len(filtered),
+        generation_ok=ok_rows,
+        filter_fail=fail_rows,
+        metrics=",".join(sorted(metric_summary)),
+    )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
 
