@@ -248,9 +248,19 @@ To evaluate a downloaded local model artifact:
 make eval EVAL_PROFILE=final EVAL_MODEL_PATH=/path/to/model
 ```
 
-`Unbabel/XCOMET-XXL` requires accepted Hugging Face access. For MetricX, set
-`METRICX_PYTHON` to a Python environment with `google-research/metricx`
-installed when running the final profile.
+`Unbabel/XCOMET-XXL` requires accepted Hugging Face access. For MetricX, use a
+separate environment and point `METRICX_REPO_DIR` at the cloned repo:
+
+```sh
+[ -d /workspace/metricx/.git ] || git clone https://github.com/google-research/metricx /workspace/metricx
+python -m venv /root/.venvs/metricx
+/root/.venvs/metricx/bin/python -m pip install -U pip
+/root/.venvs/metricx/bin/python -m pip install -r /workspace/metricx/requirements.txt
+
+METRICX_PYTHON=/root/.venvs/metricx/bin/python \
+METRICX_REPO_DIR=/workspace/metricx \
+make eval EVAL_PROFILE=final
+```
 
 Eval artifacts are written under:
 

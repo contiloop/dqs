@@ -11,6 +11,7 @@ SETUP_PY := $(if $(filter 1,$(USE_VENV)),$(VENV_PYTHON),$(PYTHON))
 QE_VENV_DIR ?= $(HOME)/.venvs/comet
 COMET_PYTHON ?= $(QE_VENV_DIR)/bin/python
 METRICX_PYTHON ?= python
+METRICX_REPO_DIR ?=
 DQS_QUIET ?= 1
 DQS_PROGRESS ?= 1
 SKIP_CAUSAL_CONV1D ?= 0
@@ -345,7 +346,7 @@ train-stage:
 	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
 		py=python3; \
 	fi; \
-	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" "$$py" src/train_stage.py \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" METRICX_REPO_DIR="$(METRICX_REPO_DIR)" "$$py" src/train_stage.py \
 		--config "$(TRAIN_CONFIG)" \
 		$(if $(TRAIN_SUBSET_IDX),--subset-idx "$(TRAIN_SUBSET_IDX)",) \
 		$(if $(TRAIN_SUBSET_SIZE),--subset-size "$(TRAIN_SUBSET_SIZE)",) \
@@ -374,7 +375,7 @@ eval:
 	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
 		py=python3; \
 	fi; \
-	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" "$$py" src/eval.py \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" METRICX_REPO_DIR="$(METRICX_REPO_DIR)" "$$py" src/eval.py \
 		--config "$(EVAL_CONFIG)" \
 		--override "eval=$(EVAL_PROFILE)" \
 		$(if $(EVAL_DATA_PATH),--data-path "$(EVAL_DATA_PATH)",) \
@@ -390,7 +391,7 @@ eval-checkpoints:
 	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
 		py=python3; \
 	fi; \
-	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" "$$py" src/eval_checkpoints.py \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" METRICX_REPO_DIR="$(METRICX_REPO_DIR)" "$$py" src/eval_checkpoints.py \
 		--config "$(EVAL_CONFIG)" \
 		--profile "$(EVAL_CHECKPOINT_PROFILE)" \
 		$(if $(EVAL_CHECKPOINT_DIR),--checkpoint-dir "$(EVAL_CHECKPOINT_DIR)",) \

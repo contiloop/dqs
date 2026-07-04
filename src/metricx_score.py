@@ -24,6 +24,23 @@ def _resolve_python(env_var: str) -> str:
     return sys.executable
 
 
+def _metricx_env(repo_env_var: str = "METRICX_REPO_DIR") -> dict[str, str]:
+    env = os.environ.copy()
+    repo_dir = env.get(repo_env_var, "").strip()
+    if not repo_dir:
+        return env
+
+    repo_path = Path(repo_dir).expanduser()
+    if not repo_path.exists():
+        raise RuntimeError(f"{repo_env_var} does not exist: {repo_path}")
+    if not (repo_path / "metricx24" / "predict.py").exists():
+        raise RuntimeError(f"{repo_env_var} does not look like google-research/metricx: {repo_path}")
+
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(repo_path) if not existing else f"{repo_path}{os.pathsep}{existing}"
+    return env
+
+
 def metricx_scores(
     rows: list[Mapping[str, Any]],
     *,
@@ -71,12 +88,13 @@ def metricx_scores(
         ]
         if not include_reference:
             cmd.append("--qe")
-        result = subprocess.run(cmd, text=True, capture_output=True)
+        result = subprocess.run(cmd, text=True, capture_output=True, env=_metricx_env())
         if result.returncode != 0:
             stderr = (result.stderr or result.stdout or "").strip()
             hint = (
                 "MetricX subprocess failed. Install google-research/metricx in "
-                f"${python_env_var} or set {python_env_var} to that Python."
+                f"${python_env_var} or set {python_env_var} to that Python. "
+                "If you cloned the repo instead of installing it, set METRICX_REPO_DIR."
             )
             raise RuntimeError(f"{hint} code={result.returncode} stderr={stderr[-2000:]}")
         if not output_path.exists():
