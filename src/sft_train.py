@@ -91,6 +91,19 @@ def _torch_dtype(dtype_name: Any) -> Any:
     raise SystemExit(f"unsupported training.dtype={dtype_name!r}")
 
 
+def _strategy_name(value: Any, *, default: str = "steps") -> str:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return default if value else "no"
+    text = str(value).strip().lower()
+    if text in {"false", "no", "none", "null", "off", "0"}:
+        return "no"
+    if text in {"true", "yes", "on", "1"}:
+        return default
+    return text
+
+
 def _call_with_supported_kwargs(fn: Any, kwargs: Mapping[str, Any]) -> Any:
     signature = inspect.signature(fn)
     if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()):
@@ -506,7 +519,7 @@ def _training_argument_kwargs(
         "weight_decay": float(training_cfg.get("weight_decay", 0.0) or 0.0),
         "num_train_epochs": float(training_cfg.get("num_train_epochs", 1) or 1),
         "max_steps": int(max_steps_override if max_steps_override is not None else (training_cfg.get("max_steps", -1) or -1)),
-        "save_strategy": str(training_cfg.get("save_strategy", "steps")),
+        "save_strategy": _strategy_name(training_cfg.get("save_strategy", "steps")),
         "save_steps": int(training_cfg.get("save_steps", 100) or 100),
         "save_total_limit": (
             None
