@@ -45,4 +45,4 @@ eval:
       python_env_var: METRICX_PYTHON
       module: metricx24.predict
       max_input_length: 1536
-      batch_size: 1
+      batch_size: 4
