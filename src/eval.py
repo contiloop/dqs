@@ -84,7 +84,7 @@ def _auto_model_candidates(cfg: Mapping[str, Any]) -> list[Path]:
     checkpoint_dir = Path(str(_get(cfg, "paths.checkpoint_dir")))
     tuning_mode = str(_get(cfg, "training.tuning_mode", "")).strip().lower()
     if tuning_mode == "lora":
-        names = ["merged_16bit"]
+        names = ["merged_16bit", "adapter"]
     elif tuning_mode == "full":
         names = ["full_model", "final"]
     else:
@@ -117,6 +117,11 @@ def _resolve_generation_model_spec(
         return {"model_path": raw, "lora_adapter_path": None}
     for candidate in _auto_model_candidates(cfg):
         if candidate.exists():
+            if _is_lora_adapter_path(candidate):
+                return {
+                    "model_path": str(_get(cfg, "model.name_or_path")),
+                    "lora_adapter_path": str(candidate),
+                }
             return {"model_path": str(candidate), "lora_adapter_path": None}
     if not require_trained_artifact:
         return {"model_path": str(_get(cfg, "model.name_or_path")), "lora_adapter_path": None}
