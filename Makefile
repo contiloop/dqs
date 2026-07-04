@@ -50,6 +50,17 @@ EVAL_CHECKPOINT_OUTPUT_DIR ?=
 EVAL_CHECKPOINT_START_STEP ?=
 EVAL_CHECKPOINT_END_STEP ?=
 EVAL_CHECKPOINT_MAX ?=
+UPLOAD_CONFIG ?= configs/config.yaml
+UPLOAD_RUN_ID ?=
+UPLOAD_RUN_DIR ?=
+UPLOAD_PATH_IN_REPO ?=
+UPLOAD_REVISION ?= main
+UPLOAD_PRIVATE ?= 1
+UPLOAD_CREATE_REPO ?= 1
+UPLOAD_DRY_RUN ?= 0
+UPLOAD_COMMIT_MESSAGE ?=
+UPLOAD_OVERRIDES ?=
+UPLOAD_IGNORE_PATTERNS ?=
 SFT_CONFIG ?= configs/config.yaml
 SFT_SUBSET_IDX ?=
 SFT_DATASET_PATH ?=
@@ -102,7 +113,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints upload-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -381,6 +392,29 @@ eval-checkpoints:
 		$(foreach override,$(EVAL_OVERRIDES),--eval-override "$(override)") \
 		$(if $(filter 1,$(EVAL_DRY_RUN)),--dry-run,) \
 		$(if $(filter 1,$(EVAL_FORCE)),--force,)
+
+upload-run:
+	@if [ -z "$(HF_DATASET_REPO)" ]; then \
+		echo "HF_DATASET_REPO is required, e.g. make upload-run HF_DATASET_REPO=username/dqs-runs UPLOAD_RUN_ID=qwen3.5_4b_instruct_lora_sf_on_seed42"; \
+		exit 2; \
+	fi
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/upload_run.py \
+		--config "$(UPLOAD_CONFIG)" \
+		--repo "$(HF_DATASET_REPO)" \
+		--revision "$(UPLOAD_REVISION)" \
+		$(if $(UPLOAD_RUN_ID),--run-id "$(UPLOAD_RUN_ID)",) \
+		$(if $(UPLOAD_RUN_DIR),--run-dir "$(UPLOAD_RUN_DIR)",) \
+		$(if $(UPLOAD_PATH_IN_REPO),--path-in-repo "$(UPLOAD_PATH_IN_REPO)",) \
+		$(if $(UPLOAD_COMMIT_MESSAGE),--commit-message "$(UPLOAD_COMMIT_MESSAGE)",) \
+		$(foreach override,$(UPLOAD_OVERRIDES),--override "$(override)") \
+		$(foreach pattern,$(UPLOAD_IGNORE_PATTERNS),--ignore-pattern "$(pattern)") \
+		$(if $(filter 1,$(UPLOAD_CREATE_REPO)),--create-repo,) \
+		$(if $(filter 1,$(UPLOAD_PRIVATE)),--private,) \
+		$(if $(filter 1,$(UPLOAD_DRY_RUN)),--dry-run,)
 
 sft:
 	@py="$(REAL_ENV_PY)"; \

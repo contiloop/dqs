@@ -277,3 +277,33 @@ eval_translations.jsonl
 W&B logs compact curves only: SFT loss/LR from Trainer plus subset summary
 counts and eval metric means. Row-level requests, outputs, translations, and
 scores stay in local JSONL artifacts.
+
+### 8. Upload run artifacts
+
+Upload a completed run folder to a Hugging Face dataset repo:
+
+```sh
+make upload-run HF_DATASET_REPO=<HF_ID>/dqs-runs UPLOAD_RUN_ID=<RUN_ID>
+```
+
+This uploads the full folder below:
+
+```text
+artifacts/runs/<RUN_ID>/
+```
+
+By default it is stored under `<RUN_ID>/` inside the dataset repo. To check the
+file list first:
+
+```sh
+make upload-run HF_DATASET_REPO=<HF_ID>/dqs-runs UPLOAD_RUN_ID=<RUN_ID> UPLOAD_DRY_RUN=1
+```
+
+If the dataset repo does not exist, it is created as private by default. Use
+`UPLOAD_PRIVATE=0` only for a public repo.
+
+For large uploads:
+
+```sh
+HF_XET_HIGH_PERFORMANCE=1 make upload-run HF_DATASET_REPO=<HF_ID>/dqs-runs UPLOAD_RUN_ID=<RUN_ID>
+```
