@@ -27,6 +27,9 @@ Runtime version notes:
 - FlashAttention2: `flash-attn==2.8.3`
 - NumPy: `numpy==2.2.6`
 
+`make set` also prepares isolated COMET and MetricX environments for
+evaluation.
+
 ### 3. Configure access
 
 ```sh
@@ -248,19 +251,17 @@ To evaluate a downloaded local model artifact:
 make eval EVAL_PROFILE=final EVAL_MODEL_PATH=/path/to/model
 ```
 
-`Unbabel/XCOMET-XXL` requires accepted Hugging Face access. For MetricX, use a
-separate environment and point `METRICX_REPO_DIR` at the cloned repo:
+To evaluate the original instruction model without a trained checkpoint:
 
 ```sh
-[ -d /workspace/metricx/.git ] || git clone https://github.com/google-research/metricx /workspace/metricx
-python -m venv /root/.venvs/metricx
-/root/.venvs/metricx/bin/python -m pip install -U pip
-/root/.venvs/metricx/bin/python -m pip install -r /workspace/metricx/requirements.txt
-
-METRICX_PYTHON=/root/.venvs/metricx/bin/python \
-METRICX_REPO_DIR=/workspace/metricx \
-make eval EVAL_PROFILE=final
+make eval EVAL_PROFILE=final EVAL_MODEL_PATH=unsloth/Qwen3.5-4B
 ```
+
+`eval.generation.model_path=auto` evaluates the trained artifact under the
+current run directory. Use `EVAL_MODEL_PATH` when evaluating a base model,
+downloaded model, or other external path. `Unbabel/XCOMET-XXL` requires accepted
+Hugging Face access. MetricX is installed by `make set` into
+`${METRICX_VENV_DIR}` with its repo at `${METRICX_REPO_DIR}`.
 
 Eval artifacts are written under:
 

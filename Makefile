@@ -10,11 +10,13 @@ REAL_ENV_PY := $(if $(filter 1,$(USE_VENV)),$(VENV_PYTHON),$(PYTHON))
 SETUP_PY := $(if $(filter 1,$(USE_VENV)),$(VENV_PYTHON),$(PYTHON))
 QE_VENV_DIR ?= $(HOME)/.venvs/comet
 COMET_PYTHON ?= $(QE_VENV_DIR)/bin/python
-METRICX_PYTHON ?= python
-METRICX_REPO_DIR ?=
+METRICX_VENV_DIR ?= $(HOME)/.venvs/metricx
+METRICX_PYTHON ?= $(METRICX_VENV_DIR)/bin/python
+METRICX_REPO_DIR ?= $(abspath ../metricx)
 DQS_QUIET ?= 1
 DQS_PROGRESS ?= 1
 SKIP_CAUSAL_CONV1D ?= 0
+SKIP_METRICX ?= 0
 DATA_CONFIG ?= configs/data.yaml
 HF_DATASET_REPO ?=
 HF_DATASET_REVISION ?=
@@ -125,7 +127,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints upload-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints upload-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -236,6 +238,44 @@ set:
 		"unbabel-comet>=2.2.7" sacrebleu
 	@$(QE_VENV_DIR)/bin/python -c 'import torch; print("set-real-env: QE venv torch", torch.__version__, "cuda", torch.cuda.is_available())'
 	@echo "set-real-env: COMET_PYTHON=$(COMET_PYTHON)"
+	@$(MAKE) set-metricx \
+		PYTHON="$(PYTHON)" \
+		PYTHON_VERSION="$(PYTHON_VERSION)" \
+		METRICX_VENV_DIR="$(METRICX_VENV_DIR)" \
+		METRICX_REPO_DIR="$(METRICX_REPO_DIR)" \
+		SKIP_METRICX="$(SKIP_METRICX)"
+
+# Target: set-metricx
+# required config keys: none
+# input artifacts: google-research/metricx repo downloaded to METRICX_REPO_DIR
+# output artifacts: MetricX isolation venv at METRICX_VENV_DIR
+# runtime: local/remote machine setup step for heavyweight final eval metrics
+# exit behavior: 0 on successful MetricX setup; non-zero on clone/install/import failure
+set-metricx:
+ifeq ($(SKIP_METRICX),1)
+	@echo "set-metricx: skip MetricX setup (SKIP_METRICX=1)"
+else
+	@echo "set-metricx: setting up MetricX repo at $(METRICX_REPO_DIR)..."
+	@if [ -d "$(METRICX_REPO_DIR)/.git" ]; then \
+		echo "set-metricx: repo exists"; \
+	elif [ -e "$(METRICX_REPO_DIR)" ]; then \
+		echo "set-metricx: $(METRICX_REPO_DIR) exists but is not a git checkout"; \
+		exit 1; \
+	else \
+		git clone https://github.com/google-research/metricx "$(METRICX_REPO_DIR)"; \
+	fi
+	@echo "set-metricx: setting up MetricX isolation venv at $(METRICX_VENV_DIR)..."
+	@if [ ! -x "$(METRICX_VENV_DIR)/bin/python" ]; then \
+		if command -v uv >/dev/null 2>&1; then \
+			uv venv --python $(PYTHON_VERSION) --seed "$(METRICX_VENV_DIR)"; \
+		else \
+			$(PYTHON) -m venv "$(METRICX_VENV_DIR)"; \
+		fi; \
+	fi
+	@$(METRICX_VENV_DIR)/bin/python -m pip install --upgrade pip setuptools wheel
+	@$(METRICX_VENV_DIR)/bin/python -m pip install -r "$(METRICX_REPO_DIR)/requirements.txt"
+	@PYTHONPATH="$(METRICX_REPO_DIR)" $(METRICX_VENV_DIR)/bin/python -c 'import metricx24.predict; print("set-metricx: METRICX_PYTHON=$(METRICX_VENV_DIR)/bin/python"); print("set-metricx: METRICX_REPO_DIR=$(METRICX_REPO_DIR)")'
+endif
 
 # Target: verify-cuda-kernels
 # required config keys: none
