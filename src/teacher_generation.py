@@ -497,6 +497,26 @@ def _record_teacher_batch_result(
     return parsed_by_id
 
 
+def _write_teacher_artifacts(
+    *,
+    subset_dir: Path,
+    request_rows: list[dict[str, Any]],
+    raw_rows: list[dict[str, Any]],
+    parsed_rows: list[dict[str, Any]],
+    rejected_rows: list[dict[str, Any]],
+) -> None:
+    records: list[dict[str, Any]] = []
+    for row in request_rows:
+        records.append({"record_type": "teacher_request", **row})
+    for row in raw_rows:
+        records.append({"record_type": "teacher_raw_response", **row})
+    for row in parsed_rows:
+        records.append({"record_type": "teacher_parsed_item", **row})
+    for row in rejected_rows:
+        records.append({"record_type": "teacher_rejected_row", **row})
+    write_jsonl(subset_dir / "teacher_artifacts.jsonl", records)
+
+
 def run_teacher_generation(
     *,
     cfg: Mapping[str, Any],
@@ -631,6 +651,13 @@ def run_teacher_generation(
         if not refill_until_target:
             break
 
+    _write_teacher_artifacts(
+        subset_dir=subset_dir,
+        request_rows=request_rows,
+        raw_rows=raw_rows,
+        parsed_rows=parsed_rows,
+        rejected_rows=rejected,
+    )
     if _save_all_step_artifacts(cfg):
         write_jsonl(subset_dir / "teacher_requests.jsonl", request_rows)
         write_jsonl(subset_dir / "teacher_responses.raw.jsonl", raw_rows)

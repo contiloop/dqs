@@ -65,15 +65,24 @@ def _remove_path_if_exists(path: Path) -> None:
 def _cleanup_compact_subset_artifacts(cfg: Mapping[str, Any], subset_dir: Path) -> None:
     if _save_all_step_artifacts(cfg):
         return
-    for rel_path in (
-        "runtime_io/qe-selection.input.jsonl",
-        "runtime_io/qe-selection.output.jsonl",
-        "filter_blocked_selection.jsonl",
-        "teacher_requests.jsonl",
-        "teacher_responses.raw.jsonl",
-        "teacher_parsed.jsonl",
-        "teacher_rejected.jsonl",
-    ):
+    rel_paths: list[str] = []
+    if (subset_dir / "qe_scores.jsonl").exists():
+        rel_paths.extend(
+            [
+                "runtime_io/qe-selection.input.jsonl",
+                "runtime_io/qe-selection.output.jsonl",
+            ]
+        )
+    if (subset_dir / "teacher_artifacts.jsonl").exists():
+        rel_paths.extend(
+            [
+                "teacher_requests.jsonl",
+                "teacher_responses.raw.jsonl",
+                "teacher_parsed.jsonl",
+                "teacher_rejected.jsonl",
+            ]
+        )
+    for rel_path in rel_paths:
         _remove_path_if_exists(subset_dir / rel_path)
 
 
@@ -787,11 +796,18 @@ def _materialize_student_translations(
                 "student_error": response.get("error"),
                 "finish_reason": response.get("finish_reason"),
                 "generated_token_count": response.get("generated_token_count", 0),
+                "request_id": request["id"],
+                "run_id": request.get("run_id"),
+                "subset_idx": request.get("subset_idx"),
+                "order_idx": request.get("order_idx"),
                 "prompt": request["prompt"],
                 "prompt_template_id": request["prompt_template_id"],
                 "prompt_template_group": request["prompt_template_group"],
                 "prompt_template_hash": request["prompt_template_hash"],
                 "chat_template_applied": request["chat_template_applied"],
+                "model": request.get("model", {}),
+                "inference": request.get("inference", {}),
+                "decoding": request.get("decoding", {}),
             }
         )
     output_path = _subset_root(cfg, subset_idx) / "student_translations.jsonl"
@@ -828,12 +844,17 @@ def _run_qe_selection(
             encoding="utf-8",
         )
         write_jsonl(qe_output_path, [])
+        write_jsonl(subset_dir / "qe_scores.jsonl", [])
         write_jsonl(subset_dir / "filter_blocked_selection.jsonl", [])
         write_jsonl(subset_dir / "selected_for_teacher.jsonl", [])
         return []
 
     qe_responses = _score_qe_requests(cfg=cfg, qe_requests=qe_requests)
     write_jsonl(qe_output_path, qe_responses)
+    write_jsonl(
+        subset_dir / "qe_scores.jsonl",
+        _qe_score_records(qe_requests=qe_requests, qe_responses=qe_responses, filter_rows=filter_rows),
+    )
     clean_qe_responses = [
         response for response in qe_responses
         if str(response.get("row_id", "")) in clean_row_ids
@@ -1013,6 +1034,51 @@ def _score_qe_requests(
             }
         )
     return responses
+
+
+def _qe_score_records(
+    *,
+    qe_requests: list[dict[str, Any]],
+    qe_responses: list[dict[str, Any]],
+    filter_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    response_by_id = {str(row.get("id", "")): row for row in qe_responses}
+    source_row_by_id = {str(row.get("id", "")): row for row in filter_rows}
+    records: list[dict[str, Any]] = []
+    for request in qe_requests:
+        response = response_by_id.get(str(request.get("id", "")), {})
+        row = source_row_by_id.get(str(request.get("row_id", "")), {})
+        raw_score = response.get("score")
+        records.append(
+            {
+                "id": request.get("row_id"),
+                "request_id": request.get("id"),
+                "order_idx": request.get("order_idx"),
+                "source": request.get("src"),
+                "target": request.get("ref", row.get("target")),
+                "metadata": row.get("metadata", {}),
+                "source_tokens": row.get("source_tokens"),
+                "student_translation": request.get("mt"),
+                "student_status": row.get("student_status"),
+                "student_error": row.get("student_error"),
+                "finish_reason": row.get("finish_reason"),
+                "generated_token_count": row.get("generated_token_count"),
+                "prompt_template_id": row.get("prompt_template_id"),
+                "prompt_template_group": row.get("prompt_template_group"),
+                "prompt_template_hash": row.get("prompt_template_hash"),
+                "chat_template_applied": row.get("chat_template_applied"),
+                "degeneration_label": row.get("degeneration_label"),
+                "degeneration_flags": row.get("degeneration_flags", []),
+                "degeneration_filter_enabled": row.get("degeneration_filter_enabled"),
+                "qe_backend": request.get("backend"),
+                "qe_model": request.get("model"),
+                "qe_requires_reference": "ref" in request,
+                "qe_status": response.get("status", "missing"),
+                "qe_score": None if raw_score is None else float(raw_score),
+                "qe_error": response.get("error"),
+            }
+        )
+    return records
 
 
 def _select_for_teacher(

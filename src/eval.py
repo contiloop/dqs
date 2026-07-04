@@ -49,10 +49,13 @@ def _remove_path_if_exists(path: Path) -> None:
 def _cleanup_compact_eval_artifacts(cfg: Mapping[str, Any], output_dir: Path) -> None:
     if _save_all_step_artifacts(cfg):
         return
+    if not (output_dir / "eval_records.jsonl").exists():
+        return
     for name in (
         "eval_requests.jsonl",
         "eval_translations.jsonl",
         "eval_filtered.jsonl",
+        "eval_scores.jsonl",
     ):
         _remove_path_if_exists(output_dir / name)
 
@@ -392,11 +395,18 @@ def _materialize_eval_translations(
                 "error": response.get("error"),
                 "finish_reason": response.get("finish_reason"),
                 "generated_token_count": response.get("generated_token_count", 0),
+                "request_id": request["id"],
+                "run_id": request.get("run_id"),
+                "eval_profile": request.get("eval_profile"),
+                "order_idx": request.get("order_idx"),
                 "prompt": request["prompt"],
                 "prompt_template_id": request["prompt_template_id"],
                 "prompt_template_group": request["prompt_template_group"],
                 "prompt_template_hash": request["prompt_template_hash"],
                 "chat_template_applied": request["chat_template_applied"],
+                "model": request.get("model", {}),
+                "inference": request.get("inference", {}),
+                "decoding": request.get("decoding", {}),
             }
         )
     return out_rows
@@ -595,6 +605,20 @@ def _score_eval_metrics(
     return score_rows, summary
 
 
+def _build_eval_records(
+    *,
+    filtered_rows: list[dict[str, Any]],
+    score_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    scores_by_id = {str(row.get("id", "")): row.get("scores", {}) for row in score_rows}
+    records: list[dict[str, Any]] = []
+    for row in filtered_rows:
+        out = dict(row)
+        out["scores"] = scores_by_id.get(str(row.get("id", "")), {})
+        records.append(out)
+    return records
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run DQS evaluation.")
     parser.add_argument("--config", default="configs/config.yaml")
@@ -663,6 +687,10 @@ def main() -> None:
             dry_run=args.dry_run,
         )
     write_jsonl(output_dir / "eval_scores.jsonl", score_rows)
+    write_jsonl(
+        output_dir / "eval_records.jsonl",
+        _build_eval_records(filtered_rows=filtered, score_rows=score_rows),
+    )
 
     label_counts = Counter(str(row.get("degeneration_label", "unknown")) for row in filtered)
     ok_rows = sum(1 for row in filtered if row.get("status") == "ok")

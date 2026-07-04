@@ -10,20 +10,35 @@ from typing import Any, Mapping
 from config_loader import compose_config
 
 
-COMPACT_PATTERNS = (
-    "subsets/subset_*/runtime_io/qe-selection.input.jsonl",
-    "subsets/subset_*/runtime_io/qe-selection.output.jsonl",
-    "subsets/subset_*/filter_blocked_selection.jsonl",
-    "subsets/subset_*/teacher_requests.jsonl",
-    "subsets/subset_*/teacher_responses.raw.jsonl",
-    "subsets/subset_*/teacher_parsed.jsonl",
-    "subsets/subset_*/teacher_rejected.jsonl",
-    "eval/*/eval_requests.jsonl",
-    "eval/*/eval_translations.jsonl",
-    "eval/*/eval_filtered.jsonl",
-    "eval/*/*/eval_requests.jsonl",
-    "eval/*/*/eval_translations.jsonl",
-    "eval/*/*/eval_filtered.jsonl",
+SUBSET_COMPACT_RULES = (
+    (
+        "qe_scores.jsonl",
+        (
+            "runtime_io/qe-selection.input.jsonl",
+            "runtime_io/qe-selection.output.jsonl",
+        ),
+    ),
+    (
+        "teacher_artifacts.jsonl",
+        (
+            "teacher_requests.jsonl",
+            "teacher_responses.raw.jsonl",
+            "teacher_parsed.jsonl",
+            "teacher_rejected.jsonl",
+        ),
+    ),
+)
+
+EVAL_COMPACT_RULES = (
+    (
+        "eval_records.jsonl",
+        (
+            "eval_requests.jsonl",
+            "eval_translations.jsonl",
+            "eval_filtered.jsonl",
+            "eval_scores.jsonl",
+        ),
+    ),
 )
 
 
@@ -49,6 +64,21 @@ def _remove_path(path: Path, *, dry_run: bool) -> int:
     return size
 
 
+def _compact_rooted_rules(root: Path, rules: tuple[tuple[str, tuple[str, ...]], ...], *, dry_run: bool) -> tuple[int, int]:
+    removed_paths = 0
+    removed_bytes = 0
+    for sentinel, rel_paths in rules:
+        if not (root / sentinel).exists():
+            continue
+        for rel_path in rel_paths:
+            path = root / rel_path
+            if not path.exists():
+                continue
+            removed_paths += 1
+            removed_bytes += _remove_path(path, dry_run=dry_run)
+    return removed_paths, removed_bytes
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Remove nonessential DQS run debug artifacts.")
     parser.add_argument("--config", default="configs/config.yaml")
@@ -69,22 +99,24 @@ def main() -> None:
     if not run_dir.exists() or not run_dir.is_dir():
         raise SystemExit(f"run directory not found: {run_dir}")
 
-    paths: list[Path] = []
-    seen: set[Path] = set()
-    for pattern in COMPACT_PATTERNS:
-        for path in run_dir.glob(pattern):
-            if path in seen:
-                continue
-            seen.add(path)
-            paths.append(path)
-
+    removed_paths = 0
     total_bytes = 0
-    for path in sorted(paths):
-        total_bytes += _remove_path(path, dry_run=args.dry_run)
+    for subset_dir in sorted(run_dir.glob("subsets/subset_*")):
+        if not subset_dir.is_dir():
+            continue
+        count, size = _compact_rooted_rules(subset_dir, SUBSET_COMPACT_RULES, dry_run=args.dry_run)
+        removed_paths += count
+        total_bytes += size
+
+    eval_dirs = sorted({path.parent for path in run_dir.glob("eval/**/eval_summary.json")})
+    for eval_dir in eval_dirs:
+        count, size = _compact_rooted_rules(eval_dir, EVAL_COMPACT_RULES, dry_run=args.dry_run)
+        removed_paths += count
+        total_bytes += size
 
     summary = {
         "run_dir": str(run_dir),
-        "removed_paths": len(paths),
+        "removed_paths": removed_paths,
         "removed_bytes": total_bytes,
         "dry_run": bool(args.dry_run),
     }
