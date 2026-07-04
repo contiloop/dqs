@@ -107,6 +107,8 @@ PIN_NUMPY_VERSION ?= 2.2.6
 # Keep FLA aligned with torch 2.10 runtime and avoid transitive resolver drift.
 PIN_FLA_CORE_VERSION ?= 0.4.2
 PIN_FLASH_LINEAR_ATTENTION_VERSION ?= 0.4.2
+# MetricX pins datasets 2.13.1, which still expects pyarrow.PyExtensionType.
+PIN_METRICX_PYARROW_VERSION ?= 20.0.0
 
 export DQS_QUIET
 export DQS_PROGRESS
@@ -243,6 +245,7 @@ set:
 		PYTHON_VERSION="$(PYTHON_VERSION)" \
 		METRICX_VENV_DIR="$(METRICX_VENV_DIR)" \
 		METRICX_REPO_DIR="$(METRICX_REPO_DIR)" \
+		PIN_METRICX_PYARROW_VERSION="$(PIN_METRICX_PYARROW_VERSION)" \
 		SKIP_METRICX="$(SKIP_METRICX)"
 
 # Target: set-metricx
@@ -273,8 +276,13 @@ else
 		fi; \
 	fi
 	@$(METRICX_VENV_DIR)/bin/python -m pip install --upgrade pip setuptools wheel
-	@$(METRICX_VENV_DIR)/bin/python -m pip install -r "$(METRICX_REPO_DIR)/requirements.txt"
-	@PYTHONPATH="$(METRICX_REPO_DIR)" $(METRICX_VENV_DIR)/bin/python -c 'import metricx24.predict; print("set-metricx: METRICX_PYTHON=$(METRICX_VENV_DIR)/bin/python"); print("set-metricx: METRICX_REPO_DIR=$(METRICX_REPO_DIR)")'
+	@constraints="$$(mktemp)"; \
+	echo "pyarrow==$(PIN_METRICX_PYARROW_VERSION)" > "$$constraints"; \
+	$(METRICX_VENV_DIR)/bin/python -m pip install -r "$(METRICX_REPO_DIR)/requirements.txt" -c "$$constraints"; \
+	status="$$?"; \
+	rm -f "$$constraints"; \
+	exit "$$status"
+	@PYTHONPATH="$(METRICX_REPO_DIR)" $(METRICX_VENV_DIR)/bin/python -c 'import pyarrow as pa; assert hasattr(pa, "PyExtensionType"), pa.__version__; import metricx24.predict; print("set-metricx: pyarrow", pa.__version__); print("set-metricx: METRICX_PYTHON=$(METRICX_VENV_DIR)/bin/python"); print("set-metricx: METRICX_REPO_DIR=$(METRICX_REPO_DIR)")'
 endif
 
 # Target: verify-cuda-kernels

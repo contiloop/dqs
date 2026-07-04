@@ -28,7 +28,8 @@ Runtime version notes:
 - NumPy: `numpy==2.2.6`
 
 `make set` also prepares isolated COMET and MetricX environments for
-evaluation.
+evaluation. MetricX uses `pyarrow==20.0.0` in its isolated environment for
+compatibility with its pinned `datasets==2.13.1`.
 
 ### 3. Configure access
 
