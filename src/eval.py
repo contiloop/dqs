@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -30,6 +31,30 @@ def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
             return default
         cursor = cursor[part]
     return cursor
+
+
+def _save_all_step_artifacts(cfg: Mapping[str, Any]) -> bool:
+    return bool(_get(cfg, "logging.save_all_step_artifacts", False))
+
+
+def _remove_path_if_exists(path: Path) -> None:
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def _cleanup_compact_eval_artifacts(cfg: Mapping[str, Any], output_dir: Path) -> None:
+    if _save_all_step_artifacts(cfg):
+        return
+    for name in (
+        "eval_requests.jsonl",
+        "eval_translations.jsonl",
+        "eval_filtered.jsonl",
+    ):
+        _remove_path_if_exists(output_dir / name)
 
 
 def _filter_metric_config(cfg: dict[str, Any], metric_ids: str | None) -> None:
@@ -662,6 +687,7 @@ def main() -> None:
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
+    _cleanup_compact_eval_artifacts(cfg, output_dir)
     if not args.skip_wandb_log:
         log_wandb_metrics(
             cfg,

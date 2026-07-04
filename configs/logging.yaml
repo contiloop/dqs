@@ -14,4 +14,4 @@ logging:
       - en-ko
   save_effective_config: true
   save_template_versions: true
-  save_all_step_artifacts: true
+  save_all_step_artifacts: false

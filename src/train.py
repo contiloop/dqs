@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,34 @@ def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
             return default
         cursor = cursor[part]
     return cursor
+
+
+def _save_all_step_artifacts(cfg: Mapping[str, Any]) -> bool:
+    return bool(_get(cfg, "logging.save_all_step_artifacts", False))
+
+
+def _remove_path_if_exists(path: Path) -> None:
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def _cleanup_compact_subset_artifacts(cfg: Mapping[str, Any], subset_dir: Path) -> None:
+    if _save_all_step_artifacts(cfg):
+        return
+    for rel_path in (
+        "runtime_io/qe-selection.input.jsonl",
+        "runtime_io/qe-selection.output.jsonl",
+        "filter_blocked_selection.jsonl",
+        "teacher_requests.jsonl",
+        "teacher_responses.raw.jsonl",
+        "teacher_parsed.jsonl",
+        "teacher_rejected.jsonl",
+    ):
+        _remove_path_if_exists(subset_dir / rel_path)
 
 
 def _subset_root(cfg: Mapping[str, Any], subset_idx: int) -> Path:
@@ -1425,6 +1454,7 @@ def main() -> None:
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
+    _cleanup_compact_subset_artifacts(cfg, subset_dir)
     progress(
         "subset done",
         run=_get(cfg, "run.id"),

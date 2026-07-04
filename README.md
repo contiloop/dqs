@@ -216,15 +216,29 @@ Subset artifacts are written under:
 artifacts/runs/${run.id}/subsets/subset_000/
 ```
 
-Key subset files:
+Default runs keep compact, resume-safe subset artifacts:
 
 ```text
 front_stage_summary.json
+phase_state.json
+input.jsonl
+student_translations.jsonl
+student_filtered.jsonl
 student_filter_summary.json
-teacher_summary.json
 selected_for_teacher.jsonl
+teacher_summary.json
 golden_pairs.jsonl
 sft_train.jsonl
+```
+
+Set `logging.save_all_step_artifacts=true` to keep debug artifacts such as QE
+runtime I/O, teacher requests, raw teacher responses, parsed teacher responses,
+and rejected teacher rows.
+
+Compact an existing run before upload:
+
+```sh
+make compact-run COMPACT_RUN_ID=<RUN_ID>
 ```
 
 ### 7. Evaluate
@@ -289,13 +303,12 @@ Key eval files:
 ```text
 eval_summary.json
 eval_scores.jsonl
-eval_filtered.jsonl
-eval_translations.jsonl
+eval_outputs.jsonl
 ```
 
 W&B logs compact curves only: SFT loss/LR from Trainer plus subset summary
-counts and eval metric means. Row-level requests, outputs, translations, and
-scores stay in local JSONL artifacts.
+counts and eval metric means. Set `logging.save_all_step_artifacts=true` to keep
+eval request, translation, and filter-debug JSONL files.
 
 ### 8. Upload run artifacts
 
@@ -309,6 +322,12 @@ This uploads the full folder below:
 
 ```text
 artifacts/runs/<RUN_ID>/
+```
+
+To replace stale files under an existing run path before upload:
+
+```sh
+make upload-run HF_DATASET_REPO=<HF_ID>/dqs-runs UPLOAD_RUN_ID=<RUN_ID> UPLOAD_DELETE_EXISTING=1
 ```
 
 By default it is stored under `<RUN_ID>/` inside the dataset repo. To check the

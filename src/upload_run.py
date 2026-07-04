@@ -77,6 +77,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ignore-pattern", action="append", default=[])
     parser.add_argument("--create-repo", action="store_true")
     parser.add_argument("--private", action="store_true")
+    parser.add_argument("--delete-existing-path", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -108,6 +109,10 @@ def main() -> None:
     print(f"upload-run: source={run_dir}")
     print(f"upload-run: destination=dataset:{destination}")
     print(f"upload-run: files={len(files)} bytes={total_bytes} ({_format_bytes(total_bytes)})")
+    if args.delete_existing_path:
+        if path_in_repo is None:
+            raise SystemExit("delete-existing-path requires a non-root path_in_repo/run_id")
+        print(f"upload-run: delete_existing_path={path_in_repo}/**")
 
     if args.dry_run:
         for path in files[:20]:
@@ -139,6 +144,7 @@ def main() -> None:
         revision=args.revision,
         commit_message=args.commit_message or f"Upload DQS run {run_id}",
         ignore_patterns=ignore_patterns,
+        delete_patterns=f"{path_in_repo}/**" if args.delete_existing_path and path_in_repo else None,
     )
     commit_url = getattr(commit_info, "commit_url", None)
     if commit_url:

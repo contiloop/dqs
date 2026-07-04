@@ -69,6 +69,10 @@ def _read_text(path: str | Path) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
+def _save_all_step_artifacts(cfg: Mapping[str, Any]) -> bool:
+    return bool(_get(cfg, "logging.save_all_step_artifacts", False))
+
+
 def _enabled_providers(cfg: Mapping[str, Any]) -> list[dict[str, Any]]:
     providers = _get(cfg, "teacher.providers", [])
     if not isinstance(providers, list):
@@ -627,10 +631,11 @@ def run_teacher_generation(
         if not refill_until_target:
             break
 
-    write_jsonl(subset_dir / "teacher_requests.jsonl", request_rows)
-    write_jsonl(subset_dir / "teacher_responses.raw.jsonl", raw_rows)
-    write_jsonl(subset_dir / "teacher_parsed.jsonl", parsed_rows)
-    write_jsonl(subset_dir / "teacher_rejected.jsonl", rejected)
+    if _save_all_step_artifacts(cfg):
+        write_jsonl(subset_dir / "teacher_requests.jsonl", request_rows)
+        write_jsonl(subset_dir / "teacher_responses.raw.jsonl", raw_rows)
+        write_jsonl(subset_dir / "teacher_parsed.jsonl", parsed_rows)
+        write_jsonl(subset_dir / "teacher_rejected.jsonl", rejected)
     write_jsonl(subset_dir / "golden_pairs.jsonl", accepted)
     shortfall = max(0, target - len(accepted))
     rejection_counts = _teacher_rejection_counts(rejected)

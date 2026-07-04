@@ -64,9 +64,15 @@ UPLOAD_REVISION ?= main
 UPLOAD_PRIVATE ?= 1
 UPLOAD_CREATE_REPO ?= 1
 UPLOAD_DRY_RUN ?= 0
+UPLOAD_DELETE_EXISTING ?= 0
 UPLOAD_COMMIT_MESSAGE ?=
 UPLOAD_OVERRIDES ?=
 UPLOAD_IGNORE_PATTERNS ?=
+COMPACT_CONFIG ?= configs/config.yaml
+COMPACT_RUN_ID ?=
+COMPACT_RUN_DIR ?=
+COMPACT_DRY_RUN ?= 0
+COMPACT_OVERRIDES ?=
 SFT_CONFIG ?= configs/config.yaml
 SFT_SUBSET_IDX ?=
 SFT_DATASET_PATH ?=
@@ -133,7 +139,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints upload-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints upload-run compact-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -487,7 +493,20 @@ upload-run:
 		$(foreach pattern,$(UPLOAD_IGNORE_PATTERNS),--ignore-pattern "$(pattern)") \
 		$(if $(filter 1,$(UPLOAD_CREATE_REPO)),--create-repo,) \
 		$(if $(filter 1,$(UPLOAD_PRIVATE)),--private,) \
+		$(if $(filter 1,$(UPLOAD_DELETE_EXISTING)),--delete-existing-path,) \
 		$(if $(filter 1,$(UPLOAD_DRY_RUN)),--dry-run,)
+
+compact-run:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/compact_run.py \
+		--config "$(COMPACT_CONFIG)" \
+		$(if $(COMPACT_RUN_ID),--run-id "$(COMPACT_RUN_ID)",) \
+		$(if $(COMPACT_RUN_DIR),--run-dir "$(COMPACT_RUN_DIR)",) \
+		$(foreach override,$(COMPACT_OVERRIDES),--override "$(override)") \
+		$(if $(filter 1,$(COMPACT_DRY_RUN)),--dry-run,)
 
 sft:
 	@py="$(REAL_ENV_PY)"; \
