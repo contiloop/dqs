@@ -1157,6 +1157,7 @@ def _student_records(
             "blocked_length_bucket": None if blocked is None else blocked.get("length_bucket"),
         }
 
+        filter_label = str(row.get("degeneration_label", "unknown"))
         records.append(
             {
                 "id": row.get("id"),
@@ -1178,10 +1179,8 @@ def _student_records(
                     "chat_template_applied": row.get("chat_template_applied"),
                 },
                 "filter": {
-                    "label": row.get("degeneration_label"),
-                    "flags": row.get("degeneration_flags", []),
-                    "enabled": row.get("degeneration_filter_enabled"),
-                    "basic_validity_only": row.get("degeneration_basic_validity_only"),
+                    "filtered": filter_label != "clean",
+                    "label": filter_label,
                 },
                 "qe": qe_payload,
                 "selection": selection_payload,
