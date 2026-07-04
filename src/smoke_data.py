@@ -10,6 +10,7 @@ from config_loader import compose_config, save_effective_config
 from io_utils import write_jsonl
 from prompting import load_student_templates, render_student_prompt
 from sft_train import _default_max_seq_length, _tokenize_prompt_completion
+from text_tokenization import text_decode, text_token_ids
 
 
 SOURCE_SENTENCES = [
@@ -81,7 +82,7 @@ def _load_tokenizer(cfg: Mapping[str, Any], *, local_files_only: bool = False) -
 
 
 def _token_ids(tokenizer: Any, text: str) -> list[int]:
-    return list(tokenizer(text, add_special_tokens=False)["input_ids"])
+    return text_token_ids(tokenizer, text, add_special_tokens=False)
 
 
 def _token_count(tokenizer: Any, text: str) -> int:
@@ -109,14 +110,14 @@ def _fit_text_to_tokens(
         if len(ids) == target_tokens:
             return text.strip()
         if len(ids) > target_tokens:
-            text = tokenizer.decode(ids[:target_tokens], skip_special_tokens=True).strip()
+            text = text_decode(tokenizer, ids[:target_tokens], skip_special_tokens=True).strip()
         else:
             sentence = sentences[cursor % len(sentences)]
             text = f"{text} {sentence}".strip()
             cursor += 1
     ids = _token_ids(tokenizer, text)
     if len(ids) > target_tokens:
-        return tokenizer.decode(ids[:target_tokens], skip_special_tokens=True).strip()
+        return text_decode(tokenizer, ids[:target_tokens], skip_special_tokens=True).strip()
     return text.strip()
 
 

@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 
 from config_loader import compose_config
 from io_utils import read_jsonl
+from text_tokenization import text_decode, text_token_ids, text_tokenizer
 from wandb_logging import configure_wandb_env, log_wandb_metrics
 
 
@@ -137,9 +138,10 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
         "use_gradient_checkpointing": training_cfg.get("gradient_checkpointing", "unsloth"),
     }
     model, tokenizer = _call_with_supported_kwargs(model_api.from_pretrained, load_kwargs)
-    if getattr(tokenizer, "pad_token", None) is None and getattr(tokenizer, "eos_token", None) is not None:
-        tokenizer.pad_token = tokenizer.eos_token
-    pad_token_id = getattr(tokenizer, "pad_token_id", None)
+    tokenizer_backend = text_tokenizer(tokenizer)
+    if getattr(tokenizer_backend, "pad_token", None) is None and getattr(tokenizer_backend, "eos_token", None) is not None:
+        tokenizer_backend.pad_token = tokenizer_backend.eos_token
+    pad_token_id = getattr(tokenizer_backend, "pad_token_id", None)
     if pad_token_id is not None and getattr(model, "config", None) is not None:
         model.config.pad_token_id = pad_token_id
     return model, tokenizer, model_api
@@ -245,8 +247,8 @@ def _tokenize_prompt_completion(
     else:
         completion_for_tokens = completion
 
-    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
-    completion_ids = tokenizer(completion_for_tokens, add_special_tokens=False)["input_ids"]
+    prompt_ids = text_token_ids(tokenizer, prompt, add_special_tokens=False)
+    completion_ids = text_token_ids(tokenizer, completion_for_tokens, add_special_tokens=False)
     input_ids = list(prompt_ids) + list(completion_ids)
     if response_only_loss:
         labels = [IGNORE_INDEX] * len(prompt_ids) + list(completion_ids)
@@ -319,9 +321,10 @@ class PromptCompletionDataset:
 
 class CompletionOnlyCollator:
     def __init__(self, tokenizer: Any) -> None:
-        self.pad_token_id = getattr(tokenizer, "pad_token_id", None)
+        tokenizer_backend = text_tokenizer(tokenizer)
+        self.pad_token_id = getattr(tokenizer_backend, "pad_token_id", None)
         if self.pad_token_id is None:
-            self.pad_token_id = getattr(tokenizer, "eos_token_id", 0) or 0
+            self.pad_token_id = getattr(tokenizer_backend, "eos_token_id", 0) or 0
 
     def __call__(self, features: list[Mapping[str, Any]]) -> dict[str, Any]:
         import torch
@@ -349,7 +352,7 @@ def _write_mask_audit(path: Path, tokenizer: Any, rows: Sequence[Mapping[str, An
         labels = list(row["labels"])
         first_supervised = next((idx for idx, value in enumerate(labels) if value != IGNORE_INDEX), None)
         supervised_ids = [value for value in labels if value != IGNORE_INDEX]
-        decoded = tokenizer.decode(supervised_ids, skip_special_tokens=False)
+        decoded = text_decode(tokenizer, supervised_ids, skip_special_tokens=False)
         samples.append(
             {
                 "id": row.get("id"),
