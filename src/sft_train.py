@@ -606,8 +606,8 @@ def _training_argument_kwargs(
     import torch
 
     wandb_cfg = logging_cfg.get("wandb", {}) if isinstance(logging_cfg.get("wandb", {}), Mapping) else {}
-    report_to: list[str] = ["wandb"] if bool(wandb_cfg.get("enabled", False)) else []
     configure_wandb_env(cfg)
+    report_to: list[str] = ["wandb"] if bool(wandb_cfg.get("enabled", False)) and _is_rank_zero() else []
     bf16 = bool(torch.cuda.is_available() and torch.cuda.is_bf16_supported())
     fp16 = bool(torch.cuda.is_available() and not bf16)
     return {

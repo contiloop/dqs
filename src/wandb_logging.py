@@ -44,6 +44,10 @@ def wandb_run_id(cfg: Mapping[str, Any]) -> str:
 def configure_wandb_env(cfg: Mapping[str, Any]) -> None:
     if not wandb_enabled(cfg):
         return
+    os.environ.setdefault("WANDB_CONSOLE", "off")
+    if not _is_main_process():
+        os.environ.setdefault("WANDB_MODE", "disabled")
+        return
     project = _get(cfg, "logging.wandb.project")
     entity = _get(cfg, "logging.wandb.entity")
     run_name = _get(cfg, "logging.wandb.run_name", _get(cfg, "run.id", "dqs"))
