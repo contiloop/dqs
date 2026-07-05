@@ -387,6 +387,104 @@ def _materialize_input(
     return selected
 
 
+def _checkpoint_dir(cfg: Mapping[str, Any]) -> Path:
+    return Path(str(_get(cfg, "paths.checkpoint_dir")))
+
+
+def _is_lora_adapter_path(path: Path) -> bool:
+    return path.is_dir() and (
+        (path / "adapter_config.json").exists()
+        or (path / "adapter_model.safetensors").exists()
+        or (path / "adapter_model.bin").exists()
+    )
+
+
+def _previous_subset_lora_adapter_path(cfg: Mapping[str, Any], subset_idx: int) -> Path | None:
+    if str(_get(cfg, "training.tuning_mode", "")).strip().lower() != "lora":
+        return None
+    run_subset_start = int(_get(cfg, "run.subset_start", 0) or 0)
+    if subset_idx <= run_subset_start:
+        return None
+
+    previous_subset_idx = subset_idx - 1
+    state_path = _checkpoint_dir(cfg) / f"sft_stage_state_subset_{previous_subset_idx:03d}.json"
+    state = _require_json(state_path, f"sft_stage_state_subset_{previous_subset_idx:03d}.json")
+    if state.get("status") != "completed":
+        raise SystemExit(
+            f"cannot run subset_{subset_idx:03d} student inference with LoRA: "
+            f"previous subset_{previous_subset_idx:03d} SFT is not completed"
+        )
+    checkpoint_dir = Path(str(state.get("checkpoint_dir", "")))
+    if not _is_lora_adapter_path(checkpoint_dir):
+        raise SystemExit(
+            f"cannot run subset_{subset_idx:03d} student inference with LoRA: "
+            f"previous checkpoint is not a LoRA adapter directory: {checkpoint_dir}"
+        )
+    return checkpoint_dir
+
+
+def _student_inference_model_cfg(cfg: Mapping[str, Any], subset_idx: int) -> dict[str, Any]:
+    model_cfg = _get(cfg, "model", {})
+    out = dict(model_cfg) if isinstance(model_cfg, Mapping) else {}
+    adapter_path = _previous_subset_lora_adapter_path(cfg, subset_idx)
+    if adapter_path is not None:
+        out["lora_adapter_path"] = str(adapter_path)
+    return out
+
+
+def _student_request_model_error(
+    *,
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+    requests: list[dict[str, Any]],
+) -> str | None:
+    if not requests:
+        return "student inference request file is empty"
+    expected = _student_inference_model_cfg(cfg, subset_idx)
+    expected_model = str(expected.get("name_or_path", ""))
+    expected_adapter = str(expected.get("lora_adapter_path", "") or "")
+    for idx, request in enumerate(requests):
+        model = request.get("model", {})
+        if not isinstance(model, Mapping):
+            return f"student inference request {idx} has invalid model config"
+        actual_model = str(model.get("name_or_path", ""))
+        actual_adapter = str(model.get("lora_adapter_path", "") or "")
+        if actual_model != expected_model:
+            return (
+                f"student inference request {idx} model mismatch: "
+                f"expected={expected_model} actual={actual_model}"
+            )
+        if actual_adapter != expected_adapter:
+            return (
+                f"student inference request {idx} LoRA adapter mismatch: "
+                f"expected={expected_adapter or '<none>'} actual={actual_adapter or '<none>'}"
+            )
+    return None
+
+
+def _remove_student_inference_dependents(subset_dir: Path) -> None:
+    for rel_path in (
+        "runtime_io/infer-student.output.jsonl",
+        "student_translations.jsonl",
+        "student_filtered.jsonl",
+        "student_filter_summary.json",
+        "student_records.jsonl",
+        "runtime_io/qe-selection.input.jsonl",
+        "runtime_io/qe-selection.output.jsonl",
+        "qe_scores.jsonl",
+        "selected_for_teacher.jsonl",
+        "filter_blocked_selection.jsonl",
+        "teacher_artifacts.jsonl",
+        "teacher_requests.jsonl",
+        "teacher_responses.raw.jsonl",
+        "teacher_parsed.jsonl",
+        "teacher_rejected.jsonl",
+        "golden_pairs.jsonl",
+        "sft_train.jsonl",
+    ):
+        _remove_path_if_exists(subset_dir / rel_path)
+
+
 def _build_inference_requests(
     *,
     cfg: Mapping[str, Any],
@@ -397,15 +495,33 @@ def _build_inference_requests(
     subset_dir = _subset_root(cfg, subset_idx)
     request_path = subset_dir / "runtime_io" / "infer-student.input.jsonl"
     if request_path.exists() and request_path.stat().st_size > 0 and not force:
-        return read_jsonl(request_path)
+        existing_requests = read_jsonl(request_path)
+        request_error = _student_request_model_error(
+            cfg=cfg,
+            subset_idx=subset_idx,
+            requests=existing_requests,
+        )
+        if request_error is None:
+            return existing_requests
+        print(
+            f"[resume] invalid existing student inference request; rebuilding: {request_error}",
+            file=sys.stderr,
+        )
+        _remove_student_inference_dependents(subset_dir)
 
     prompt_cfg = _get(cfg, "prompts", {})
     if not isinstance(prompt_cfg, Mapping):
         raise SystemExit("prompts config must be a mapping")
     template_path = Path(str(prompt_cfg.get("student_templates_path", "prompts/student_templates.yaml")))
     template_cfg = load_student_templates(template_path)
-    model_cfg = _get(cfg, "model", {})
     inference_cfg = _get(cfg, "inference", {})
+    student_model_cfg = _student_inference_model_cfg(cfg, subset_idx)
+    progress(
+        "student inference model",
+        subset=f"subset_{subset_idx:03d}",
+        model=student_model_cfg.get("name_or_path"),
+        lora_adapter=student_model_cfg.get("lora_adapter_path"),
+    )
 
     requests: list[dict[str, Any]] = []
     for order_idx, row in enumerate(rows):
@@ -413,7 +529,7 @@ def _build_inference_requests(
         rendered = render_student_prompt(
             template_cfg=template_cfg,
             prompt_cfg=prompt_cfg,
-            model_cfg=model_cfg if isinstance(model_cfg, Mapping) else {},
+            model_cfg=student_model_cfg,
             source=str(row["source"]),
             row_id=row_id,
             subset_idx=subset_idx,
@@ -432,7 +548,7 @@ def _build_inference_requests(
                 "prompt_template_group": rendered.template_group,
                 "prompt_template_hash": rendered.template_hash,
                 "chat_template_applied": rendered.chat_template_applied,
-                "model": dict(model_cfg) if isinstance(model_cfg, Mapping) else {},
+                "model": dict(student_model_cfg),
                 "inference": dict(inference_cfg) if isinstance(inference_cfg, Mapping) else {},
                 "decoding": {
                     "temperature": _get(cfg, "inference.temperature", 0.0),
@@ -1694,6 +1810,13 @@ def main() -> None:
         normalized: list[dict[str, Any]] = []
         try:
             requests = _require_jsonl(request_path, "infer-student.input.jsonl")
+            request_error = _student_request_model_error(
+                cfg=cfg,
+                subset_idx=subset_idx,
+                requests=requests,
+            )
+            if request_error is not None:
+                raise ValueError(request_error)
             responses = _require_jsonl(response_path, "infer-student.output.jsonl")
             valid, reason, normalized = _validate_vllm_outputs(
                 requests=requests,
