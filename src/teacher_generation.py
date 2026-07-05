@@ -19,6 +19,7 @@ from progress import progress, progress_context
 
 TeacherLabel = Literal["no_change", "minor", "major", "critical", "invalid"]
 TEACHER_ACCEPTED_LABELS = ("no_change", "minor", "major", "critical")
+INVALID_REASON_KO = "독립적으로 번역하기 어려운 원문"
 TeacherErrorType = Literal[
     "mistranslation",
     "omission",
@@ -55,6 +56,16 @@ class TeacherOutputItem(BaseModel):
 
 class TeacherBatchOutput(BaseModel):
     items: list[TeacherOutputItem]
+
+
+def _normalize_teacher_output_item(item: TeacherOutputItem) -> TeacherOutputItem:
+    if item.label == "invalid":
+        item.final_translation = None
+        item.invalid_reason_ko = INVALID_REASON_KO
+        item.errors = []
+    else:
+        item.invalid_reason_ko = None
+    return item
 
 
 def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
@@ -483,6 +494,7 @@ def _record_teacher_batch_result(
     parsed = result.get("parsed")
     if isinstance(parsed, TeacherBatchOutput):
         for item in parsed.items:
+            item = _normalize_teacher_output_item(item)
             parsed_by_id[item.id] = item
             parsed_rows.append(
                 {

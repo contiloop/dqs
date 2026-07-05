@@ -30,7 +30,7 @@ Examples of invalid SOURCE:
 - "High Close Low Close Fourth Quarter..........................."
 - "Joy, PA Manufacturing(P) 33,000 Owned Mt."
 
-For these cases, set label to invalid and use a short Korean reason such as "문맥 없는 표 조각" or "독립적으로 번역하기 어려운 행 조각".
+For these cases, set label to invalid and set invalid_reason_ko exactly to "독립적으로 번역하기 어려운 원문". Do not invent a different invalid reason.
 
 Translation principles:
 
@@ -126,7 +126,7 @@ The JSON object must have exactly one top-level field:
       "id": "same id as input item",
       "label": "no_change | minor | major | critical | invalid",
       "final_translation": "final Korean translation, or null if invalid",
-      "invalid_reason_ko": "short Korean reason if label is invalid, otherwise null",
+      "invalid_reason_ko": "독립적으로 번역하기 어려운 원문 if label is invalid, otherwise null",
       "errors": [
         {
           "error_span_target": "exact incorrect Korean span from DRAFT, or null if the issue is an omission",
@@ -155,7 +155,7 @@ JSON rules:
 Output field rules:
 - If label is no_change, final_translation must be exactly DRAFT and errors must be [].
 - If label is minor, major, or critical, final_translation must contain the corrected final Korean translation.
-- If label is invalid, final_translation must be null, invalid_reason_ko must contain a short Korean reason, and errors must be [].
+- If label is invalid, final_translation must be null, invalid_reason_ko must be exactly "독립적으로 번역하기 어려운 원문", and errors must be [].
 - If label is not invalid, invalid_reason_ko must be null.
 
 Error annotation rules:
