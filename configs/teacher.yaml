@@ -5,6 +5,7 @@ teacher:
   refill_until_target: true
   structured_output: true
   max_retries_per_row: 3
+  abort_on_all_failed_window: true
   max_output_tokens: 8192
   temperature: 0.0
   invalid_label: invalid

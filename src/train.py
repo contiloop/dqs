@@ -598,6 +598,10 @@ def _run_sft_training_phase(
     subset_idx: int,
     dataset_path: Path,
 ) -> dict[str, Any]:
+    sft_rows = read_jsonl(dataset_path)
+    if not sft_rows:
+        raise SystemExit(f"SFT dataset is empty before training launch: {dataset_path}")
+
     nproc_per_node = max(1, int(args.sft_nproc_per_node or 1))
     if nproc_per_node == 1:
         return run_sft_training(

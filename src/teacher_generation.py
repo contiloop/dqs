@@ -537,6 +537,31 @@ def _write_teacher_artifacts(
     write_jsonl(subset_dir / "teacher_artifacts.jsonl", records)
 
 
+def _flush_teacher_outputs(
+    *,
+    cfg: Mapping[str, Any],
+    subset_dir: Path,
+    request_rows: list[dict[str, Any]],
+    raw_rows: list[dict[str, Any]],
+    parsed_rows: list[dict[str, Any]],
+    rejected_rows: list[dict[str, Any]],
+    accepted_rows: list[dict[str, Any]],
+) -> None:
+    _write_teacher_artifacts(
+        subset_dir=subset_dir,
+        request_rows=request_rows,
+        raw_rows=raw_rows,
+        parsed_rows=parsed_rows,
+        rejected_rows=rejected_rows,
+    )
+    if _save_all_step_artifacts(cfg):
+        write_jsonl(subset_dir / "teacher_requests.jsonl", request_rows)
+        write_jsonl(subset_dir / "teacher_responses.raw.jsonl", raw_rows)
+        write_jsonl(subset_dir / "teacher_parsed.jsonl", parsed_rows)
+        write_jsonl(subset_dir / "teacher_rejected.jsonl", rejected_rows)
+    write_jsonl(subset_dir / "golden_pairs.jsonl", accepted_rows)
+
+
 def run_teacher_generation(
     *,
     cfg: Mapping[str, Any],
@@ -553,6 +578,7 @@ def run_teacher_generation(
     max_output_tokens = max(512, int(teacher_cfg.get("max_output_tokens", 8192) or 8192))
     temperature = float(teacher_cfg.get("temperature", 0.0) or 0.0)
     refill_until_target = bool(teacher_cfg.get("refill_until_target", True))
+    abort_on_all_failed_window = bool(teacher_cfg.get("abort_on_all_failed_window", True))
 
     system_prompt = _read_text(str(teacher_cfg.get("system_prompt_path", "prompts/teacher_system.txt")))
     user_template = _read_text(str(teacher_cfg.get("user_prompt_path", "prompts/teacher_user_batch.txt")))
@@ -668,22 +694,41 @@ def run_teacher_generation(
             rejected=len(rejected),
             target=target,
         )
+        if abort_on_all_failed_window and results and all(result.get("status") == "failed" for result in results.values()):
+            sample_error = next(
+                (
+                    str(result.get("error", "")).strip()
+                    for result in results.values()
+                    if str(result.get("error", "")).strip()
+                ),
+                "unknown teacher provider error",
+            )
+            _flush_teacher_outputs(
+                cfg=cfg,
+                subset_dir=subset_dir,
+                request_rows=request_rows,
+                raw_rows=raw_rows,
+                parsed_rows=parsed_rows,
+                rejected_rows=rejected,
+                accepted_rows=accepted,
+            )
+            raise RuntimeError(
+                "teacher API window failed for every batch; "
+                f"aborting before SFT. start_batch={batch_cursor} "
+                f"batches={len(results)} sample_error={sample_error[:1000]}"
+            )
         if not refill_until_target:
             break
 
-    _write_teacher_artifacts(
+    _flush_teacher_outputs(
+        cfg=cfg,
         subset_dir=subset_dir,
         request_rows=request_rows,
         raw_rows=raw_rows,
         parsed_rows=parsed_rows,
         rejected_rows=rejected,
+        accepted_rows=accepted,
     )
-    if _save_all_step_artifacts(cfg):
-        write_jsonl(subset_dir / "teacher_requests.jsonl", request_rows)
-        write_jsonl(subset_dir / "teacher_responses.raw.jsonl", raw_rows)
-        write_jsonl(subset_dir / "teacher_parsed.jsonl", parsed_rows)
-        write_jsonl(subset_dir / "teacher_rejected.jsonl", rejected)
-    write_jsonl(subset_dir / "golden_pairs.jsonl", accepted)
     shortfall = max(0, target - len(accepted))
     rejection_counts = _teacher_rejection_counts(rejected)
     label_summary = _teacher_label_summary(accepted)
