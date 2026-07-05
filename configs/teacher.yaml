@@ -1,7 +1,7 @@
 teacher:
   max_workers: 25
   batch_size: 4
-  candidate_multiplier: 3
+  candidate_multiplier: 4
   refill_until_target: true
   structured_output: true
   max_retries_per_row: 3

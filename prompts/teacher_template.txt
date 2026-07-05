@@ -22,7 +22,15 @@ Rewrite policy:
 - invalid: SOURCE itself is not translatable or invalid. This includes cases where SOURCE is empty, corrupted, nonsensical, or incomplete to the point that a faithful Korean translation cannot be produced. If the English sentence or passage appears truncated or incomplete and the core meaning cannot be determined, label it invalid. Provide a short Korean reason instead of a translation.
 
 Do not label a case as invalid merely because DRAFT is poor. If SOURCE is translatable, produce a final Korean translation and use critical when DRAFT is unusable.
-Do not label SOURCE as invalid merely because it is a headline, title, bullet point, table entry, caption, label, or grammatical fragment, as long as it is meaningfully translatable.
+Do not label SOURCE as invalid merely because it is a headline, title, bullet point, table entry, caption, label, or grammatical fragment, as long as it is meaningfully translatable and useful as a standalone training pair.
+
+Label SOURCE as invalid if it is an orphaned table, header, footer, list artifact, partial table row, detached column label, OCR/layout residue, or a fragment whose semantic relation cannot be determined without missing surrounding table or document context. Do not preserve such cases merely because the individual words can be translated literally. A valid SOURCE must contain enough standalone semantic content to produce a faithful Korean translation useful for training.
+
+Examples of invalid SOURCE:
+- "High Close Low Close Fourth Quarter..........................."
+- "Joy, PA Manufacturing(P) 33,000 Owned Mt."
+
+For these cases, set label to invalid and use a short Korean reason such as "문맥 없는 표 조각" or "독립적으로 번역하기 어려운 행 조각".
 
 Translation principles:
 
