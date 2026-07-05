@@ -35,10 +35,11 @@ def _clean_run_id(value: str) -> str:
     return (cleaned or "dqs")[:128]
 
 
-def wandb_run_id(cfg: Mapping[str, Any]) -> str:
+def wandb_run_id(cfg: Mapping[str, Any]) -> str | None:
     configured = _get(cfg, "logging.wandb.run_id")
-    raw = str(configured or _get(cfg, "run.id", "dqs"))
-    return _clean_run_id(raw)
+    if configured is None or not str(configured).strip():
+        return None
+    return _clean_run_id(str(configured))
 
 
 def configure_wandb_env(cfg: Mapping[str, Any]) -> None:
@@ -59,8 +60,13 @@ def configure_wandb_env(cfg: Mapping[str, Any]) -> None:
         os.environ["WANDB_ENTITY"] = str(entity)
     if run_name:
         os.environ["WANDB_NAME"] = str(run_name)
-    os.environ["WANDB_RUN_ID"] = wandb_run_id(cfg)
-    os.environ["WANDB_RESUME"] = str(_get(cfg, "logging.wandb.resume", "allow"))
+    run_id = wandb_run_id(cfg)
+    if run_id:
+        os.environ["WANDB_RUN_ID"] = run_id
+        os.environ["WANDB_RESUME"] = str(_get(cfg, "logging.wandb.resume", "allow"))
+    else:
+        os.environ.pop("WANDB_RUN_ID", None)
+        os.environ.pop("WANDB_RESUME", None)
     if isinstance(tags, list) and tags:
         os.environ["WANDB_TAGS"] = ",".join(str(tag) for tag in tags)
 
@@ -70,9 +76,11 @@ def _wandb_init_kwargs(cfg: Mapping[str, Any], job_type: str | None) -> dict[str
     kwargs: dict[str, Any] = {
         "project": _get(cfg, "logging.wandb.project", "dqs"),
         "name": str(_get(cfg, "logging.wandb.run_name", _get(cfg, "run.id", "dqs"))),
-        "id": wandb_run_id(cfg),
-        "resume": str(_get(cfg, "logging.wandb.resume", "allow")),
     }
+    run_id = wandb_run_id(cfg)
+    if run_id:
+        kwargs["id"] = run_id
+        kwargs["resume"] = str(_get(cfg, "logging.wandb.resume", "allow"))
     entity = _get(cfg, "logging.wandb.entity")
     if entity:
         kwargs["entity"] = str(entity)
