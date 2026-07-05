@@ -85,10 +85,11 @@ Run every subset in order:
 make train-stage
 ```
 
-Run every subset with four-way vLLM inference sharding and four-GPU SFT:
+Run every subset with four-way vLLM inference sharding, four-way QE scoring,
+and four-GPU SFT:
 
 ```sh
-make train-stage SFT_NPROC_PER_NODE=4 TRAIN_OVERRIDES='inference.num_gpus=4 inference.tensor_parallel_size=1 inference.gpu_ids=[0,1,2,3]'
+make train-stage SFT_NPROC_PER_NODE=4 TRAIN_OVERRIDES='inference.num_gpus=4 inference.tensor_parallel_size=1 inference.gpu_ids=[0,1,2,3] qe.selection.num_gpus=4 qe.selection.gpu_ids=[0,1,2,3]'
 ```
 
 Create deterministic smoke datasets first:

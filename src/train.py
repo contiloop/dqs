@@ -1111,12 +1111,16 @@ def _score_qe_requests(
     if not model_name:
         raise SystemExit("qe.selection.model is required")
 
+    raw_num_gpus = qe_cfg.get("num_gpus", 1)
     scores = comet_scores(
         qe_requests,
         model_name=model_name,
         batch_size=int(qe_cfg.get("batch_size", 512) or 512),
         python_env_var=str(qe_cfg.get("python_env_var", "COMET_PYTHON")),
         include_reference=bool(qe_cfg.get("requires_reference", False)),
+        num_gpus=None if raw_num_gpus is None else int(raw_num_gpus),
+        gpu_ids=qe_cfg.get("gpu_ids"),
+        shard_strategy=str(qe_cfg.get("shard_strategy", "order_split")),
     )
     responses: list[dict[str, Any]] = []
     for request, score in zip(qe_requests, scores):

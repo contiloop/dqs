@@ -5,4 +5,7 @@ qe:
     requires_reference: false
     python_env_var: COMET_PYTHON
     batch_size: 512
+    num_gpus: 1
+    gpu_ids: null
+    shard_strategy: order_split
   allow_fallback: false
