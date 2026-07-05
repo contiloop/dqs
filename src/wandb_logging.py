@@ -44,9 +44,10 @@ def wandb_run_id(cfg: Mapping[str, Any]) -> str:
 def configure_wandb_env(cfg: Mapping[str, Any]) -> None:
     if not wandb_enabled(cfg):
         return
-    os.environ.setdefault("WANDB_CONSOLE", "off")
+    os.environ["WANDB_CONSOLE"] = "off"
+    os.environ.setdefault("WANDB_SILENT", "true")
     if not _is_main_process():
-        os.environ.setdefault("WANDB_MODE", "disabled")
+        os.environ["WANDB_MODE"] = "disabled"
         return
     project = _get(cfg, "logging.wandb.project")
     entity = _get(cfg, "logging.wandb.entity")
@@ -115,6 +116,7 @@ def _define_metrics_once(run: Any) -> None:
         run.define_metric("checkpoint/step")
         run.define_metric("subset/*", step_metric="subset/index")
         run.define_metric("stage/*", step_metric="subset/index")
+        run.define_metric("train/*", step_metric="train/global_step")
         run.define_metric("eval/val/*", step_metric="train/global_step")
         run.define_metric("eval/final/*", step_metric="train/global_step")
         run.define_metric("eval_checkpoint/*", step_metric="checkpoint/step")

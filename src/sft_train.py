@@ -15,7 +15,7 @@ from io_utils import read_jsonl
 from progress import progress_context
 from runtime_logging import configure_runtime_logging, quiet_third_party_output
 from text_tokenization import text_decode, text_token_ids, text_tokenizer
-from wandb_logging import configure_wandb_env
+from wandb_logging import configure_wandb_env, log_wandb_metrics
 
 
 configure_runtime_logging()
@@ -623,7 +623,6 @@ def _training_argument_kwargs(
 
     wandb_cfg = logging_cfg.get("wandb", {}) if isinstance(logging_cfg.get("wandb", {}), Mapping) else {}
     configure_wandb_env(cfg)
-    report_to: list[str] = ["wandb"] if bool(wandb_cfg.get("enabled", False)) and _is_rank_zero() else []
     bf16 = bool(torch.cuda.is_available() and torch.cuda.is_bf16_supported())
     fp16 = bool(torch.cuda.is_available() and not bf16)
     return {
@@ -660,7 +659,7 @@ def _training_argument_kwargs(
         ),
         "bf16": bf16,
         "fp16": fp16,
-        "report_to": report_to,
+        "report_to": [],
         "run_name": str(wandb_cfg.get("run_name", _get(cfg, "run.id", "dqs"))),
         "ddp_find_unused_parameters": False if _world_size() > 1 else None,
     }
@@ -782,6 +781,53 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     return artifacts
 
 
+def _sft_wandb_payload(logs: Mapping[str, Any], *, subset_idx: int, global_step: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "train/global_step": global_step,
+        "subset/index": subset_idx,
+        "sft/subset_idx": subset_idx,
+    }
+    for key, value in logs.items():
+        if key == "step" or isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        payload[f"train/{key}"] = float(value)
+    return payload
+
+
+def _wandb_train_callbacks(cfg: Mapping[str, Any], *, subset_idx: int) -> list[Any]:
+    if not bool(_get(cfg, "logging.wandb.enabled", False)) or not _is_rank_zero():
+        return []
+    from transformers import TrainerCallback
+
+    class DQSWandbTrainCallback(TrainerCallback):
+        def on_log(self, args: Any, state: Any, control: Any, logs: Mapping[str, Any] | None = None, **kwargs: Any) -> None:
+            if not logs:
+                return
+            global_step = int(getattr(state, "global_step", 0) or 0)
+            log_wandb_metrics(
+                cfg,
+                _sft_wandb_payload(logs, subset_idx=subset_idx, global_step=global_step),
+                step=global_step,
+                job_type="sft",
+            )
+
+        def on_train_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> None:
+            global_step = int(getattr(state, "global_step", 0) or 0)
+            log_wandb_metrics(
+                cfg,
+                {
+                    "train/global_step": global_step,
+                    "subset/index": subset_idx,
+                    "sft/subset_idx": subset_idx,
+                },
+                step=global_step,
+                job_type="sft",
+                finish=True,
+            )
+
+    return [DQSWandbTrainCallback()]
+
+
 def run_sft_training(
     *,
     cfg: Mapping[str, Any],
@@ -871,16 +917,19 @@ def run_sft_training(
         max_steps_override=stage_plan["stage_target_global_step"] if stage_plan else None,
         ignore_data_skip_override=True if stage_plan else None,
     )
+    wandb_callbacks = _wandb_train_callbacks(cfg, subset_idx=subset_idx)
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         data_collator=CompletionOnlyCollator(tokenizer),
+        callbacks=wandb_callbacks,
     ) if stage_plan is None else DQSStageSchedulerTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         data_collator=CompletionOnlyCollator(tokenizer),
+        callbacks=wandb_callbacks,
         dqs_scheduler_total_steps=int(stage_plan["stage_scheduler_total_steps"]),
     )
     if stage_plan and _is_rank_zero():
