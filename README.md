@@ -85,6 +85,12 @@ Run every subset in order:
 make train-stage
 ```
 
+Run every subset with four-way vLLM inference sharding and four-GPU SFT:
+
+```sh
+make train-stage SFT_NPROC_PER_NODE=4 TRAIN_OVERRIDES='inference.num_gpus=4 inference.tensor_parallel_size=1 inference.gpu_ids=[0,1,2,3]'
+```
+
 Create deterministic smoke datasets first:
 
 ```sh
@@ -174,7 +180,9 @@ phase. `TRAIN_STAGE_END_SUBSET` is exclusive.
 
 During `make train-stage`, SFT uses one LR schedule across the full subset
 cycle. Optimizer, scheduler, and global step state are saved at the end of each
-subset.
+subset. When `SFT_NPROC_PER_NODE` is greater than `1`, the SFT phase is launched
+with `torch.distributed.run`; the configured effective batch size is kept fixed
+by reducing gradient accumulation.
 
 To ignore automatic resume selection, set `TRAIN_RESUME=none`.
 

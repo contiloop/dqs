@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import inspect
 import json
 import math
@@ -69,21 +70,87 @@ def _world_size() -> int:
     return 1
 
 
-def _gradient_accumulation_steps(cfg: Mapping[str, Any]) -> int:
+def _local_rank() -> int:
+    raw = os.environ.get("LOCAL_RANK")
+    if raw and raw.lstrip("-").isdigit():
+        return max(0, int(raw))
+    return 0
+
+
+def _process_rank() -> int:
+    for key in ("RANK", "SLURM_PROCID", "LOCAL_RANK"):
+        raw = os.environ.get(key)
+        if raw and raw.lstrip("-").isdigit():
+            return int(raw)
+    return 0
+
+
+def _is_rank_zero() -> bool:
+    return _process_rank() == 0
+
+
+def _configure_distributed_device() -> None:
+    if _world_size() <= 1:
+        return
+    try:
+        import torch
+    except ModuleNotFoundError as exc:
+        raise SystemExit("torch is required for distributed SFT") from exc
+
+    if torch.cuda.is_available():
+        torch.cuda.set_device(_local_rank())
+
+
+def _distributed_barrier() -> None:
+    try:
+        import torch
+
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.barrier()
+    except Exception:
+        return
+
+
+def _destroy_distributed_process_group() -> None:
+    try:
+        import torch
+
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
+    except Exception:
+        return
+
+
+@contextlib.contextmanager
+def _rank0_progress_context(event: str, **fields: Any) -> Any:
+    if _is_rank_zero():
+        with progress_context(event, **fields):
+            yield
+    else:
+        yield
+
+
+def _gradient_accumulation_steps(cfg: Mapping[str, Any], *, world_size: int | None = None) -> int:
     raw = _get(cfg, "training.gradient_accumulation_steps", "auto")
     if raw != "auto":
         return max(1, int(raw))
     effective = int(_get(cfg, "training.effective_batch_size", 128) or 128)
     per_device = int(_get(cfg, "training.per_device_train_batch_size", 1) or 1)
-    denominator = max(1, per_device * _world_size())
+    denominator = max(1, per_device * (world_size or _world_size()))
     return max(1, math.ceil(effective / denominator))
 
 
-def estimate_update_steps_for_rows(row_count: int, cfg: Mapping[str, Any]) -> int:
+def estimate_update_steps_for_rows(
+    row_count: int,
+    cfg: Mapping[str, Any],
+    *,
+    world_size: int | None = None,
+) -> int:
+    resolved_world_size = world_size or _world_size()
     per_device = int(_get(cfg, "training.per_device_train_batch_size", 1) or 1)
-    micro_batch_rows = max(1, per_device * _world_size())
+    micro_batch_rows = max(1, per_device * resolved_world_size)
     micro_batches = max(1, math.ceil(max(1, row_count) / micro_batch_rows))
-    return max(1, math.ceil(micro_batches / _gradient_accumulation_steps(cfg)))
+    return max(1, math.ceil(micro_batches / _gradient_accumulation_steps(cfg, world_size=resolved_world_size)))
 
 
 def _torch_dtype(dtype_name: Any) -> Any:
@@ -718,10 +785,11 @@ def run_sft_training(
     if not rows:
         raise SystemExit(f"SFT dataset is empty: {dataset_path_obj}")
 
+    _configure_distributed_device()
     max_seq_length = _default_max_seq_length(cfg)
-    with progress_context("sft load-model", subset=f"subset_{subset_idx:03d}", model=_get(cfg, "model.name_or_path")):
+    with _rank0_progress_context("sft load-model", subset=f"subset_{subset_idx:03d}", model=_get(cfg, "model.name_or_path")):
         model, tokenizer, model_api = _load_model_and_tokenizer(cfg, max_seq_length=max_seq_length)
-    with progress_context("sft tokenize", subset=f"subset_{subset_idx:03d}", rows=len(rows), max_seq_length=max_seq_length):
+    with _rank0_progress_context("sft tokenize", subset=f"subset_{subset_idx:03d}", rows=len(rows), max_seq_length=max_seq_length):
         tokenized_rows = _prepare_tokenized_rows(
             tokenizer=tokenizer,
             rows=rows,
@@ -729,7 +797,9 @@ def run_sft_training(
             max_seq_length=max_seq_length,
         )
     audit_dir = output_dir_obj / "audit"
-    _write_mask_audit(audit_dir / f"sft_mask_audit_subset_{subset_idx:03d}.json", tokenizer, tokenized_rows)
+    if _is_rank_zero():
+        _write_mask_audit(audit_dir / f"sft_mask_audit_subset_{subset_idx:03d}.json", tokenizer, tokenized_rows)
+    _distributed_barrier()
     max_observed_length = max(len(row["input_ids"]) for row in tokenized_rows)
     summary: dict[str, Any] = {
         "run_id": _get(cfg, "run.id"),
@@ -741,15 +811,19 @@ def run_sft_training(
         "response_only_loss": bool(_get(cfg, "training.response_only_loss", True)),
         "gradient_accumulation_steps": _gradient_accumulation_steps(cfg),
         "world_size": _world_size(),
+        "process_rank": _process_rank(),
+        "local_rank": _local_rank(),
         "output_dir": str(output_dir_obj),
         "dry_run": dry_run,
     }
     if dry_run:
         summary_path = output_dir_obj / f"sft_dry_run_summary_subset_{subset_idx:03d}.json"
-        summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        if _is_rank_zero():
+            summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        _distributed_barrier()
         return summary
 
-    with progress_context("sft prepare-tuning", subset=f"subset_{subset_idx:03d}", mode=_get(cfg, "training.tuning_mode")):
+    with _rank0_progress_context("sft prepare-tuning", subset=f"subset_{subset_idx:03d}", mode=_get(cfg, "training.tuning_mode")):
         model = _apply_lora_if_needed(cfg, model, model_api, audit_dir)
     from transformers import Trainer, set_seed
 
@@ -793,24 +867,27 @@ def run_sft_training(
         data_collator=CompletionOnlyCollator(tokenizer),
         dqs_scheduler_total_steps=int(stage_plan["stage_scheduler_total_steps"]),
     )
-    if stage_plan:
+    if stage_plan and _is_rank_zero():
         _write_sft_stage_state(Path(stage_plan["path"]), stage_plan)
     try:
-        with progress_context("sft train", subset=f"subset_{subset_idx:03d}", rows=len(tokenized_rows), resume=resume_from_checkpoint):
+        with _rank0_progress_context("sft train", subset=f"subset_{subset_idx:03d}", rows=len(tokenized_rows), resume=resume_from_checkpoint):
             train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         trainer.save_state()
         if force_save_checkpoint or stage_plan:
             _save_checkpoint_at_current_step(trainer)
     except BaseException as exc:
-        if stage_plan:
+        if stage_plan and _is_rank_zero():
             failed_plan = dict(stage_plan)
             failed_plan["status"] = "failed"
             failed_plan["error"] = f"{type(exc).__name__}: {exc}"
             failed_plan["actual_global_step"] = int(getattr(trainer.state, "global_step", 0))
             _write_sft_stage_state(Path(stage_plan["path"]), failed_plan)
         raise
-    with progress_context("sft save-artifacts", subset=f"subset_{subset_idx:03d}", output_dir=output_dir_obj):
-        artifacts = _save_model_artifacts(cfg, model, tokenizer, output_dir_obj)
+    artifacts: dict[str, Any] = {}
+    if _is_rank_zero():
+        with progress_context("sft save-artifacts", subset=f"subset_{subset_idx:03d}", output_dir=output_dir_obj):
+            artifacts = _save_model_artifacts(cfg, model, tokenizer, output_dir_obj)
+    _distributed_barrier()
     summary.update(
         {
             "dry_run": False,
@@ -825,7 +902,8 @@ def run_sft_training(
         completed_plan["status"] = "completed"
         completed_plan["actual_global_step"] = summary["global_step"]
         completed_plan["checkpoint_dir"] = str(Path(output_dir_obj) / f"checkpoint-{summary['global_step']}")
-        _write_sft_stage_state(Path(stage_plan["path"]), completed_plan)
+        if _is_rank_zero():
+            _write_sft_stage_state(Path(stage_plan["path"]), completed_plan)
         summary.update(
             {
                 "stage_scheduler_total_steps": stage_plan["stage_scheduler_total_steps"],
@@ -837,7 +915,9 @@ def run_sft_training(
             }
         )
     summary_path = output_dir_obj / f"sft_training_summary_subset_{subset_idx:03d}.json"
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    if _is_rank_zero():
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    _distributed_barrier()
     return summary
 
 
@@ -847,23 +927,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--subset-idx", type=int, default=None)
     parser.add_argument("--dataset-path", default=None)
     parser.add_argument("--output-dir", default=None)
+    parser.add_argument("--stage-scheduler-total-steps", type=int, default=None)
+    parser.add_argument("--force-save-checkpoint", action="store_true")
     parser.add_argument("--override", action="append", default=[])
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
 
 def main() -> None:
-    args = parse_args()
-    cfg = compose_config(args.config, overrides=args.override)
-    subset_idx = int(args.subset_idx if args.subset_idx is not None else _get(cfg, "run.subset_start", 0))
-    summary = run_sft_training(
-        cfg=cfg,
-        subset_idx=subset_idx,
-        dataset_path=args.dataset_path,
-        output_dir=args.output_dir,
-        dry_run=args.dry_run,
-    )
-    print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    try:
+        args = parse_args()
+        cfg = compose_config(args.config, overrides=args.override)
+        subset_idx = int(args.subset_idx if args.subset_idx is not None else _get(cfg, "run.subset_start", 0))
+        summary = run_sft_training(
+            cfg=cfg,
+            subset_idx=subset_idx,
+            dataset_path=args.dataset_path,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+            stage_scheduler_total_steps=args.stage_scheduler_total_steps,
+            force_save_checkpoint=args.force_save_checkpoint,
+        )
+        if _is_rank_zero():
+            print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    finally:
+        _destroy_distributed_process_group()
 
 
 if __name__ == "__main__":

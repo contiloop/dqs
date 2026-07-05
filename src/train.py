@@ -574,6 +574,64 @@ def _run_vllm(request_path: Path, output_path: Path, *, force: bool) -> list[dic
     )
 
 
+def _sft_training_summary_path(cfg: Mapping[str, Any], subset_idx: int) -> Path:
+    return Path(str(_get(cfg, "paths.checkpoint_dir"))) / f"sft_training_summary_subset_{subset_idx:03d}.json"
+
+
+def _run_sft_training_phase(
+    *,
+    cfg: Mapping[str, Any],
+    args: argparse.Namespace,
+    subset_idx: int,
+    dataset_path: Path,
+) -> dict[str, Any]:
+    nproc_per_node = max(1, int(args.sft_nproc_per_node or 1))
+    if nproc_per_node == 1:
+        return run_sft_training(
+            cfg=cfg,
+            subset_idx=subset_idx,
+            dataset_path=dataset_path,
+            stage_scheduler_total_steps=args.sft_scheduler_total_steps,
+            force_save_checkpoint=args.sft_force_save_checkpoint,
+        )
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc_per_node",
+        str(nproc_per_node),
+        str(Path(__file__).with_name("sft_train.py")),
+        "--config",
+        args.config,
+        "--subset-idx",
+        str(subset_idx),
+        "--dataset-path",
+        str(dataset_path),
+    ]
+    if args.sft_scheduler_total_steps is not None:
+        cmd.extend(["--stage-scheduler-total-steps", str(args.sft_scheduler_total_steps)])
+    if args.sft_force_save_checkpoint:
+        cmd.append("--force-save-checkpoint")
+    for override in args.override:
+        cmd.extend(["--override", override])
+
+    env = os.environ.copy()
+    src_dir = str(Path(__file__).resolve().parent)
+    env["PYTHONPATH"] = src_dir + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    progress("sft ddp dispatch", subset=f"subset_{subset_idx:03d}", nproc_per_node=nproc_per_node)
+    subprocess.run(cmd, check=True, env=env)
+
+    summary_path = _sft_training_summary_path(cfg, subset_idx)
+    if not summary_path.exists() or summary_path.stat().st_size <= 0:
+        raise SystemExit(f"SFT DDP finished but summary was not written: {summary_path}")
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if not isinstance(summary, dict):
+        raise SystemExit(f"SFT DDP summary must be a JSON object: {summary_path}")
+    return summary
+
+
 def _resolve_gpu_ids(inference_cfg: Mapping[str, Any]) -> list[int]:
     raw_gpu_ids = inference_cfg.get("gpu_ids")
     if raw_gpu_ids is None:
@@ -1413,6 +1471,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--sft-scheduler-total-steps", type=int, default=None)
     parser.add_argument("--sft-force-save-checkpoint", action="store_true")
+    parser.add_argument("--sft-nproc-per-node", type=int, default=1)
     return parser.parse_args()
 
 
@@ -1579,7 +1638,7 @@ def main() -> None:
 
         if "sft" in skipped:
             sft_training_summary = _read_json_if_exists(
-                Path(str(_get(cfg, "paths.checkpoint_dir"))) / f"sft_training_summary_subset_{subset_idx:03d}.json"
+                _sft_training_summary_path(cfg, subset_idx)
             )
         else:
             sft_training_summary = _run_tracked_phase(
@@ -1587,12 +1646,11 @@ def main() -> None:
                 subset_dir=subset_dir,
                 subset_idx=subset_idx,
                 phase="sft",
-                func=lambda: run_sft_training(
+                func=lambda: _run_sft_training_phase(
                     cfg=cfg,
+                    args=args,
                     subset_idx=subset_idx,
                     dataset_path=subset_dir / "sft_train.jsonl",
-                    stage_scheduler_total_steps=args.sft_scheduler_total_steps,
-                    force_save_checkpoint=args.sft_force_save_checkpoint,
                 ),
             )
     summary = {
@@ -1623,6 +1681,7 @@ def main() -> None:
         "sft_dataset_path": sft_summary.get("sft_dataset_path"),
         "sft_training_global_step": sft_training_summary.get("global_step"),
         "sft_training_output_dir": sft_training_summary.get("output_dir"),
+        "sft_training_world_size": sft_training_summary.get("world_size"),
         "dry_run": bool(args.dry_run),
         "resume_mode": args.resume,
         "resumed_from": start_from_phase,

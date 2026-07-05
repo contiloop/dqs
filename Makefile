@@ -401,6 +401,7 @@ train:
 		$(if $(TRAIN_DATA_PATH),--data-path "$(TRAIN_DATA_PATH)",) \
 		$(if $(TRAIN_START_FROM),--start-from-phase "$(TRAIN_START_FROM)",) \
 		--resume "$(TRAIN_RESUME)" \
+		--sft-nproc-per-node "$(SFT_NPROC_PER_NODE)" \
 		$(foreach override,$(TRAIN_OVERRIDES),--override "$(override)") \
 		$(if $(filter 1,$(TRAIN_DRY_RUN)),--dry-run,) \
 		$(if $(filter 1,$(TRAIN_FORCE)),--force,)
@@ -417,6 +418,7 @@ train-stage:
 		$(if $(TRAIN_DATA_PATH),--data-path "$(TRAIN_DATA_PATH)",) \
 		$(if $(TRAIN_START_FROM),--start-from-phase "$(TRAIN_START_FROM)",) \
 		--resume "$(TRAIN_RESUME)" \
+		--sft-nproc-per-node "$(SFT_NPROC_PER_NODE)" \
 		$(if $(TRAIN_STAGE_END_SUBSET),--stage-end-subset "$(TRAIN_STAGE_END_SUBSET)",) \
 		$(if $(TRAIN_STAGE_MAX_SUBSETS),--stage-max-subsets "$(TRAIN_STAGE_MAX_SUBSETS)",) \
 		--eval-every-n-subsets "$(EVAL_EVERY_N_SUBSETS)" \

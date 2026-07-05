@@ -268,7 +268,7 @@ eval:
     python_env_var: COMET_PYTHON
     batch_size: 512
 teacher:
-  max_workers: 20
+  max_workers: 25
   batch_size: 4
   candidate_multiplier: 3
   refill_until_target: true
@@ -331,7 +331,14 @@ training:
     bias: none
     use_rslora: false
     loftq_config: null
-    target_modules: auto_discover_text_layers
+    target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
     modules_to_save: null
   train_vision_layers: false
   optimizer_resume_required: true
@@ -363,5 +370,5 @@ logging:
     - en-ko
   save_effective_config: true
   save_template_versions: true
-  save_all_step_artifacts: true
+  save_all_step_artifacts: false
 version: 1

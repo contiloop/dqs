@@ -94,6 +94,8 @@ def _train_subset_cmd(
         str(subset_idx),
         "--resume",
         args.resume,
+        "--sft-nproc-per-node",
+        str(max(1, int(args.sft_nproc_per_node or 1))),
     ]
     if args.subset_size is not None:
         cmd.extend(["--subset-size", str(args.subset_size)])
@@ -129,11 +131,16 @@ def _stage_scheduler_total_steps(
     *,
     cfg: Mapping[str, Any],
     stage_end: int,
+    sft_world_size: int,
 ) -> int:
     cycle_start = int(_get(cfg, "run.subset_start", 0) or 0)
     subset_count = max(1, stage_end - cycle_start)
     planned_rows = _planned_sft_rows_per_subset(cfg)
-    planned_steps_per_subset = estimate_update_steps_for_rows(planned_rows, cfg)
+    planned_steps_per_subset = estimate_update_steps_for_rows(
+        planned_rows,
+        cfg,
+        world_size=max(1, sft_world_size),
+    )
     return subset_count * planned_steps_per_subset
 
 
@@ -228,7 +235,12 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         end_subset=args.stage_end_subset,
         max_subsets=args.stage_max_subsets,
     )
-    sft_scheduler_total_steps = _stage_scheduler_total_steps(cfg=cfg, stage_end=stage_end)
+    sft_nproc_per_node = max(1, int(args.sft_nproc_per_node or 1))
+    sft_scheduler_total_steps = _stage_scheduler_total_steps(
+        cfg=cfg,
+        stage_end=stage_end,
+        sft_world_size=sft_nproc_per_node,
+    )
     summary_path = _stage_summary_path(cfg)
     summary: dict[str, Any] = {
         "run_id": _get(cfg, "run.id"),
@@ -243,6 +255,7 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         "eval_on_final_subset": bool(args.eval_on_final_subset),
         "eval_profile": args.eval_profile,
         "sft_scheduler_total_steps": sft_scheduler_total_steps,
+        "sft_nproc_per_node": sft_nproc_per_node,
         "sft_planned_rows_per_subset": _planned_sft_rows_per_subset(cfg),
         "subsets": [],
     }
@@ -254,6 +267,7 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         end_subset_exclusive=stage_end,
         subset_size=subset_size,
         eval_every_n_subsets=args.eval_every_n_subsets,
+        sft_nproc_per_node=sft_nproc_per_node,
     )
 
     start_from_phase_used = False
@@ -355,6 +369,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", choices=["auto", "none"], default="auto")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--sft-nproc-per-node", type=int, default=1)
     parser.add_argument("--stage-end-subset", type=int, default=None)
     parser.add_argument("--stage-max-subsets", type=int, default=None)
     parser.add_argument("--eval-every-n-subsets", type=int, default=0)
