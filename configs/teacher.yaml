@@ -1,5 +1,5 @@
 teacher:
-  max_workers: 20
+  max_workers: 25
   batch_size: 4
   candidate_multiplier: 3
   refill_until_target: true
