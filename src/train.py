@@ -120,8 +120,21 @@ def _skipped_phases(start_from_phase: str | None) -> set[str]:
     return set(TRAIN_PHASES[:TRAIN_PHASES.index(start_from_phase)])
 
 
+def _rewind_skipped_phases(skipped: set[str], phase: str) -> set[str]:
+    if phase not in TRAIN_PHASES:
+        return set(skipped)
+    phase_idx = TRAIN_PHASES.index(phase)
+    return {item for item in skipped if TRAIN_PHASES.index(item) < phase_idx}
+
+
 def _require_jsonl(path: Path, artifact_name: str) -> list[dict[str, Any]]:
     if not path.exists() or path.stat().st_size <= 0:
+        raise SystemExit(f"cannot resume: {artifact_name} not found at {path}")
+    return read_jsonl(path)
+
+
+def _require_jsonl_file(path: Path, artifact_name: str) -> list[dict[str, Any]]:
+    if not path.exists():
         raise SystemExit(f"cannot resume: {artifact_name} not found at {path}")
     return read_jsonl(path)
 
@@ -881,6 +894,149 @@ def _materialize_student_translations(
     return out_rows
 
 
+def _student_translation_artifact_error(
+    *,
+    input_rows: list[dict[str, Any]],
+    requests: list[dict[str, Any]],
+    responses: list[dict[str, Any]],
+    student_rows: list[dict[str, Any]],
+) -> str | None:
+    if len(student_rows) != len(input_rows):
+        return f"student_translations row count mismatch: expected={len(input_rows)} actual={len(student_rows)}"
+    if len(requests) != len(input_rows):
+        return f"infer-student input count mismatch: expected={len(input_rows)} actual={len(requests)}"
+
+    if [str(row.get("id", "")) for row in student_rows] != [str(row.get("id", "")) for row in input_rows]:
+        return "student_translations row ids do not match input row ids in order"
+
+    request_by_row_id = {str(row.get("row_id", "")): row for row in requests}
+    response_by_id = {str(row.get("id", "")): row for row in responses}
+    for row in student_rows:
+        row_id = str(row.get("id", ""))
+        request = request_by_row_id.get(row_id)
+        if request is None:
+            return f"student row has no matching inference request: row_id={row_id}"
+        request_id = str(request.get("id", ""))
+        if str(row.get("request_id", "")) != request_id:
+            return f"student row request_id mismatch: row_id={row_id}"
+        if request_id not in response_by_id:
+            return f"student row has no matching inference response: row_id={row_id}"
+    return None
+
+
+def _qe_response_artifact_error(
+    *,
+    qe_requests: list[dict[str, Any]],
+    qe_responses: list[dict[str, Any]],
+) -> str | None:
+    request_by_id = {str(row.get("id", "")): row for row in qe_requests}
+    if len(request_by_id) != len(qe_requests):
+        return "qe-selection input has duplicate or missing request ids"
+
+    response_by_id: dict[str, dict[str, Any]] = {}
+    duplicate_ids: set[str] = set()
+    for response in qe_responses:
+        response_id = str(response.get("id", ""))
+        if not response_id:
+            return "qe-selection output has a response without id"
+        if response_id in response_by_id:
+            duplicate_ids.add(response_id)
+        response_by_id[response_id] = response
+    if duplicate_ids:
+        return f"qe-selection output has duplicate ids: {sorted(duplicate_ids)[:3]}"
+
+    missing = sorted(set(request_by_id) - set(response_by_id))
+    extra = sorted(set(response_by_id) - set(request_by_id))
+    if missing:
+        return f"qe-selection output is missing responses: {missing[:3]} count={len(missing)}"
+    if extra:
+        return f"qe-selection output has extra responses: {extra[:3]} count={len(extra)}"
+    if len(qe_responses) != len(qe_requests):
+        return f"qe-selection row count mismatch: expected={len(qe_requests)} actual={len(qe_responses)}"
+
+    for request in qe_requests:
+        response = response_by_id[str(request.get("id", ""))]
+        if str(response.get("row_id", "")) != str(request.get("row_id", "")):
+            return f"qe-selection row_id mismatch for request={request.get('id')}"
+        if response.get("status") != "ok":
+            return f"qe-selection response is not ok for request={request.get('id')}: {response.get('status')}"
+        if not isinstance(response.get("score"), (int, float)):
+            return f"qe-selection response has invalid score for request={request.get('id')}"
+    return None
+
+
+def _qe_selection_artifact_error(
+    *,
+    subset_dir: Path,
+    student_rows: list[dict[str, Any]],
+    filter_rows: list[dict[str, Any]],
+    student_filter_summary: Mapping[str, Any],
+    selected_rows: list[dict[str, Any]],
+) -> str | None:
+    if len(filter_rows) != len(student_rows):
+        return f"student_filtered row count mismatch: expected={len(student_rows)} actual={len(filter_rows)}"
+    if [str(row.get("id", "")) for row in filter_rows] != [str(row.get("id", "")) for row in student_rows]:
+        return "student_filtered row ids do not match student_translations row ids in order"
+    summary_filter_rows = student_filter_summary.get("filter_input_rows")
+    if isinstance(summary_filter_rows, int) and summary_filter_rows != len(filter_rows):
+        return (
+            "student_filter_summary filter_input_rows mismatch: "
+            f"expected={len(filter_rows)} actual={summary_filter_rows}"
+        )
+
+    qe_requests = _require_jsonl_file(
+        subset_dir / "runtime_io" / "qe-selection.input.jsonl",
+        "qe-selection.input.jsonl",
+    )
+    qe_responses = _require_jsonl_file(
+        subset_dir / "runtime_io" / "qe-selection.output.jsonl",
+        "qe-selection.output.jsonl",
+    )
+    qe_scores = _require_jsonl_file(subset_dir / "qe_scores.jsonl", "qe_scores.jsonl")
+    student_records = _require_jsonl_file(subset_dir / "student_records.jsonl", "student_records.jsonl")
+
+    qe_eligible_ids = [
+        str(row.get("id", ""))
+        for row in filter_rows
+        if row.get("student_status") == "ok" and str(row.get("student_translation", "")).strip()
+    ]
+    request_row_ids = [str(row.get("row_id", "")) for row in qe_requests]
+    if request_row_ids != qe_eligible_ids:
+        return "qe-selection input row_ids do not match QE-eligible student rows in order"
+
+    response_error = _qe_response_artifact_error(qe_requests=qe_requests, qe_responses=qe_responses)
+    if response_error is not None:
+        return response_error
+
+    if len(qe_scores) != len(qe_requests):
+        return f"qe_scores row count mismatch: expected={len(qe_requests)} actual={len(qe_scores)}"
+    if [str(row.get("request_id", "")) for row in qe_scores] != [str(row.get("id", "")) for row in qe_requests]:
+        return "qe_scores request ids do not match qe-selection input ids in order"
+    if len(student_records) != len(filter_rows):
+        return f"student_records row count mismatch: expected={len(filter_rows)} actual={len(student_records)}"
+
+    clean_ids = {str(row.get("id", "")) for row in filter_rows if row.get("degeneration_label") == "clean"}
+    scored_ids = {str(row.get("row_id", "")) for row in qe_responses}
+    selected_ids: set[str] = set()
+    for row in selected_rows:
+        row_id = str(row.get("id", ""))
+        if not row_id:
+            return "selected_for_teacher contains a row without id"
+        if row_id in selected_ids:
+            return f"selected_for_teacher has duplicate id: {row_id}"
+        selected_ids.add(row_id)
+        if row_id not in clean_ids:
+            return f"selected_for_teacher contains a non-clean row: {row_id}"
+        if row_id not in scored_ids:
+            return f"selected_for_teacher contains an unscored row: {row_id}"
+        if not isinstance(row.get("qe_score"), (int, float)):
+            return f"selected_for_teacher row has invalid qe_score: {row_id}"
+
+    if qe_requests and not selected_rows:
+        return "selected_for_teacher is empty despite non-empty qe-selection input"
+    return None
+
+
 def _run_qe_selection(
     *,
     cfg: Mapping[str, Any],
@@ -1529,17 +1685,28 @@ def main() -> None:
         )
 
     if "student-infer" in skipped:
-        requests = _require_jsonl(request_path, "infer-student.input.jsonl")
-        responses = _require_jsonl(response_path, "infer-student.output.jsonl")
-        valid, reason, normalized = _validate_vllm_outputs(
-            requests=requests,
-            responses=responses,
-            allow_dry_run=args.dry_run,
-        )
-        if not valid:
-            raise SystemExit(f"cannot resume: invalid infer-student.output.jsonl: {reason}")
-        responses = normalized
-    else:
+        valid = False
+        reason = "unknown"
+        normalized: list[dict[str, Any]] = []
+        try:
+            requests = _require_jsonl(request_path, "infer-student.input.jsonl")
+            responses = _require_jsonl(response_path, "infer-student.output.jsonl")
+            valid, reason, normalized = _validate_vllm_outputs(
+                requests=requests,
+                responses=responses,
+                allow_dry_run=args.dry_run,
+            )
+        except (SystemExit, ValueError, json.JSONDecodeError) as exc:
+            reason = str(exc)
+        if valid:
+            responses = normalized
+        else:
+            print(
+                f"[resume] invalid student-infer artifacts; rerunning student-infer: {reason}",
+                file=sys.stderr,
+            )
+            skipped = _rewind_skipped_phases(skipped, "student-infer")
+    if "student-infer" not in skipped:
         def _student_infer_phase() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             built_requests = _build_inference_requests(
                 cfg=cfg,
@@ -1562,8 +1729,27 @@ def main() -> None:
         )
 
     if "student-filter" in skipped:
-        student_rows = _require_jsonl(subset_dir / "student_translations.jsonl", "student_translations.jsonl")
-    else:
+        student_error = None
+        try:
+            student_rows = _require_jsonl(
+                subset_dir / "student_translations.jsonl",
+                "student_translations.jsonl",
+            )
+            student_error = _student_translation_artifact_error(
+                input_rows=input_rows,
+                requests=requests,
+                responses=responses,
+                student_rows=student_rows,
+            )
+        except (SystemExit, ValueError, json.JSONDecodeError) as exc:
+            student_error = str(exc)
+        if student_error is not None:
+            print(
+                f"[resume] invalid student-filter artifacts; rerunning student-filter: {student_error}",
+                file=sys.stderr,
+            )
+            skipped = _rewind_skipped_phases(skipped, "student-filter")
+    if "student-filter" not in skipped:
         student_rows = _run_tracked_phase(
             cfg=cfg,
             subset_dir=subset_dir,
@@ -1585,10 +1771,35 @@ def main() -> None:
     student_filter_summary = {}
     if not args.dry_run:
         if "qe-select" in skipped:
-            _require_jsonl(subset_dir / "student_filtered.jsonl", "student_filtered.jsonl")
-            student_filter_summary = _require_json(subset_dir / "student_filter_summary.json", "student_filter_summary.json")
-            selected_rows = _require_jsonl(subset_dir / "selected_for_teacher.jsonl", "selected_for_teacher.jsonl")
-        else:
+            qe_error = None
+            try:
+                filter_rows = _require_jsonl_file(subset_dir / "student_filtered.jsonl", "student_filtered.jsonl")
+                student_filter_summary = _require_json(
+                    subset_dir / "student_filter_summary.json",
+                    "student_filter_summary.json",
+                )
+                selected_rows = _require_jsonl_file(
+                    subset_dir / "selected_for_teacher.jsonl",
+                    "selected_for_teacher.jsonl",
+                )
+                qe_error = _qe_selection_artifact_error(
+                    subset_dir=subset_dir,
+                    student_rows=student_rows,
+                    filter_rows=filter_rows,
+                    student_filter_summary=student_filter_summary,
+                    selected_rows=selected_rows,
+                )
+            except (SystemExit, ValueError, json.JSONDecodeError) as exc:
+                qe_error = str(exc)
+            if qe_error is not None:
+                print(
+                    f"[resume] invalid qe-select artifacts; rerunning qe-select: {qe_error}",
+                    file=sys.stderr,
+                )
+                skipped = _rewind_skipped_phases(skipped, "qe-select")
+                student_filter_summary = {}
+                selected_rows = []
+        if "qe-select" not in skipped:
             selected_rows = _run_tracked_phase(
                 cfg=cfg,
                 subset_dir=subset_dir,
