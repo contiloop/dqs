@@ -45,6 +45,18 @@ def _is_completed_subset(cfg: Mapping[str, Any], subset_idx: int) -> bool:
     return bool(state and state.get("status") == "completed")
 
 
+def _subset_completion_error(cfg: Mapping[str, Any], subset_idx: int) -> str | None:
+    state = _read_phase_state(_subset_root(cfg, subset_idx))
+    if not state:
+        return "phase_state.json is missing"
+    if state.get("status") != "completed":
+        return (
+            "phase_state.json is not completed: "
+            f"phase={state.get('phase')} status={state.get('status')}"
+        )
+    return None
+
+
 def _resolve_stage_end(
     *,
     cfg: Mapping[str, Any],
@@ -299,6 +311,15 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         try:
             with progress_context("stage subset", subset=f"subset_{subset_idx:03d}"):
                 subprocess.run(train_cmd, check=True)
+        except KeyboardInterrupt as exc:
+            subset_record["status"] = "interrupted"
+            subset_record["error"] = "interrupted by user"
+            subset_record["summary_path"] = str(_front_stage_summary_path(cfg, subset_idx))
+            summary["subsets"].append(subset_record)
+            summary["status"] = "interrupted"
+            summary["failed_subset_idx"] = subset_idx
+            _write_stage_summary(summary_path, summary)
+            raise SystemExit(130) from exc
         except subprocess.CalledProcessError as exc:
             subset_record["status"] = "failed"
             subset_record["error"] = f"train exited with code {exc.returncode}"
@@ -308,6 +329,16 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
             summary["failed_subset_idx"] = subset_idx
             _write_stage_summary(summary_path, summary)
             raise SystemExit(exc.returncode) from exc
+        completion_error = _subset_completion_error(cfg, subset_idx)
+        if completion_error is not None:
+            subset_record["status"] = "failed"
+            subset_record["error"] = f"train exited without completing subset: {completion_error}"
+            subset_record["summary_path"] = str(_front_stage_summary_path(cfg, subset_idx))
+            summary["subsets"].append(subset_record)
+            summary["status"] = "failed"
+            summary["failed_subset_idx"] = subset_idx
+            _write_stage_summary(summary_path, summary)
+            raise SystemExit(subset_record["error"])
 
         subset_record["status"] = "completed"
         subset_record["summary_path"] = str(_front_stage_summary_path(cfg, subset_idx))
@@ -327,6 +358,15 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
             try:
                 with progress_context("stage eval", subset=f"subset_{subset_idx:03d}", profile=args.eval_profile):
                     subprocess.run(eval_cmd, check=True)
+            except KeyboardInterrupt as exc:
+                subset_record["eval_status"] = "interrupted"
+                subset_record["eval_error"] = "interrupted by user"
+                summary["subsets"].append(subset_record)
+                summary["status"] = "interrupted"
+                summary["failed_subset_idx"] = subset_idx
+                summary["failed_stage"] = "eval"
+                _write_stage_summary(summary_path, summary)
+                raise SystemExit(130) from exc
             except subprocess.CalledProcessError as exc:
                 subset_record["eval_status"] = "failed"
                 subset_record["eval_error"] = f"eval exited with code {exc.returncode}"
