@@ -464,6 +464,24 @@ def _format_metric_value(value: float | None) -> str | None:
     return f"{float(value):.6g}"
 
 
+def _sentence_sacrebleu_scores(
+    *,
+    sacrebleu: Any,
+    metric_name: str,
+    rows: list[dict[str, str]],
+) -> list[float]:
+    scores: list[float] = []
+    for row in rows:
+        if metric_name == "bleu":
+            score = sacrebleu.sentence_bleu(row["mt"], [row["ref"]]).score
+        elif metric_name == "chrf":
+            score = sacrebleu.sentence_chrf(row["mt"], [row["ref"]]).score
+        else:
+            raise SystemExit(f"unsupported sacrebleu metric={metric_name!r}")
+        scores.append(float(score))
+    return scores
+
+
 def _score_eval_metrics(
     *,
     cfg: Mapping[str, Any],
@@ -518,10 +536,18 @@ def _score_eval_metrics(
                     score = float(sacrebleu.corpus_chrf(hypotheses, [references]).score)
                 else:
                     raise SystemExit(f"unsupported sacrebleu metric={metric_name!r}")
+                sentence_scores = _sentence_sacrebleu_scores(
+                    sacrebleu=sacrebleu,
+                    metric_name=metric_name,
+                    rows=metric_rows,
+                )
+                for row, row_score in zip(score_rows, sentence_scores):
+                    row["scores"][metric_id] = row_score
                 summary[metric_id] = {
                     "backend": backend,
                     "metric": metric_name,
                     "score": score,
+                    "row_score": f"sentence_{metric_name}",
                     "higher_is_better": True,
                 }
                 progress(
@@ -613,10 +639,36 @@ def _build_eval_records(
     scores_by_id = {str(row.get("id", "")): row.get("scores", {}) for row in score_rows}
     records: list[dict[str, Any]] = []
     for row in filtered_rows:
-        out = dict(row)
-        out.pop("prompt", None)
-        out["scores"] = scores_by_id.get(str(row.get("id", "")), {})
-        records.append(out)
+        records.append(
+            {
+                "id": row.get("id"),
+                "run_id": row.get("run_id"),
+                "eval_profile": row.get("eval_profile"),
+                "source": row.get("source"),
+                "target": row.get("target"),
+                "translation": row.get("translation"),
+                "source_tokens": row.get("source_tokens"),
+                "prompt": {
+                    "template_id": row.get("prompt_template_id"),
+                    "template_group": row.get("prompt_template_group"),
+                    "template_hash": row.get("prompt_template_hash"),
+                    "chat_template_applied": row.get("chat_template_applied"),
+                },
+                "generation": {
+                    "status": row.get("status"),
+                    "finish_reason": row.get("finish_reason"),
+                    "generated_token_count": row.get("generated_token_count"),
+                    "error": row.get("error"),
+                },
+                "filter": {
+                    "enabled": row.get("degeneration_filter_enabled"),
+                    "label": row.get("degeneration_label"),
+                    "flags": row.get("degeneration_flags", []),
+                },
+                "scores": scores_by_id.get(str(row.get("id", "")), {}),
+                "metadata": row.get("metadata", {}),
+            }
+        )
     return records
 
 
