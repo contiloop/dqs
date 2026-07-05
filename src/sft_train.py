@@ -89,6 +89,22 @@ def _is_rank_zero() -> bool:
     return _process_rank() == 0
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+@contextlib.contextmanager
+def _unsloth_output_context() -> Any:
+    if _is_rank_zero() and _env_flag("DQS_SHOW_UNSLOTH_LOGS", True):
+        yield
+    else:
+        with quiet_third_party_output():
+            yield
+
+
 def _configure_distributed_device() -> None:
     if _world_size() <= 1:
         return
@@ -216,7 +232,7 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
     if str(training_cfg.get("backend", "unsloth")).lower() != "unsloth":
         raise SystemExit("training.backend must be unsloth; fallback training backends are disabled")
 
-    with quiet_third_party_output():
+    with _unsloth_output_context():
         model_api = _resolve_model_api(cfg)
     dtype = _torch_dtype(training_cfg.get("dtype", "auto"))
     load_kwargs = {
@@ -230,7 +246,7 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
         "revision": str(model_cfg.get("revision", model_cfg.get("tokenizer_revision", "main"))),
         "use_gradient_checkpointing": training_cfg.get("gradient_checkpointing", "unsloth"),
     }
-    with quiet_third_party_output():
+    with _unsloth_output_context():
         model, tokenizer = _call_with_supported_kwargs(model_api.from_pretrained, load_kwargs)
     tokenizer_backend = text_tokenizer(tokenizer)
     if getattr(tokenizer_backend, "pad_token", None) is None and getattr(tokenizer_backend, "eos_token", None) is not None:
@@ -331,7 +347,7 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
         "finetune_attention_modules": True,
         "finetune_mlp_modules": True,
     }
-    with quiet_third_party_output():
+    with _unsloth_output_context():
         model = _call_with_supported_kwargs(model_api.get_peft_model, peft_kwargs)
     if not bool(training_cfg.get("train_vision_layers", False)):
         _ensure_no_visual_trainable_parameters(model)
