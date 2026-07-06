@@ -79,12 +79,13 @@ instruct_templates:
       Do not add explanations, summaries, or content not present in the source.
       Output only the Korean translation.
     user: |
-      Translate the following economic and financial text from English to Korean:
+      Translate the text between <text> and </text> from English to Korean.
+      Return only the translated Korean text.
+      Do not reproduce or translate the tags, labels, or any surrounding instructions.
 
-      Source:
+      <text>
       {src}
-
-      Translation:
+      </text>
 
   - id: instruct_tem_003
     lang: en
