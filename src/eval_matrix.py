@@ -187,7 +187,7 @@ def _eval_cmd(
         _override("eval.generation.top_p", model.get("top_p", top_p)),
         _override("logging.wandb.enabled", False),
     ]
-    reasoning_effort = model.get("reasoning_effort", suite.get("reasoning_effort"))
+    reasoning_effort = model.get("reasoning_effort", openrouter.get("reasoning_effort", suite.get("reasoning_effort")))
     if reasoning_effort:
         overrides.append(_override("inference.openrouter.reasoning_effort", reasoning_effort))
     reasoning = model.get("reasoning", openrouter.get("reasoning"))

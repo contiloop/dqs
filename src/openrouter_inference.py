@@ -18,6 +18,7 @@ from runtime_logging import configure_runtime_logging
 configure_runtime_logging()
 
 TRANSIENT_HTTP_STATUS = {408, 409, 429, 500, 502, 503, 504}
+REASONING_FALLBACK_HTTP_STATUS = {400, 422}
 
 
 def _get(mapping: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
@@ -111,6 +112,7 @@ def _request_body(row: Mapping[str, Any]) -> dict[str, Any]:
         "temperature": float(decoding.get("temperature", 0.0) or 0.0),
         "top_p": float(decoding.get("top_p", 1.0) or 1.0),
         "max_tokens": int(decoding.get("max_new_tokens", 1024) or 1024),
+        "include_reasoning": False,
     }
     provider = cfg.get("provider")
     if isinstance(provider, Mapping):
@@ -122,10 +124,35 @@ def _request_body(row: Mapping[str, Any]) -> dict[str, Any]:
     if reasoning_effort:
         body["reasoning"] = dict(body.get("reasoning", {}))
         body["reasoning"]["effort"] = reasoning_effort
+        body["reasoning_effort"] = reasoning_effort
     extra_body = cfg.get("extra_body", {})
     if isinstance(extra_body, Mapping):
         body = _deep_merge(body, extra_body)
     return body
+
+
+def _uses_disabled_reasoning(body: Mapping[str, Any]) -> bool:
+    reasoning = body.get("reasoning", {})
+    if not isinstance(reasoning, Mapping):
+        return False
+    return (
+        reasoning.get("enabled") is False
+        or str(reasoning.get("effort", "")).strip().lower() == "none"
+        or str(body.get("reasoning_effort", "")).strip().lower() == "none"
+    )
+
+
+def _minimal_reasoning_body(body: Mapping[str, Any]) -> dict[str, Any]:
+    fallback = dict(body)
+    reasoning = fallback.get("reasoning", {})
+    reasoning = dict(reasoning) if isinstance(reasoning, Mapping) else {}
+    reasoning.pop("enabled", None)
+    reasoning["effort"] = "minimal"
+    reasoning["exclude"] = True
+    fallback["reasoning"] = reasoning
+    fallback["reasoning_effort"] = "minimal"
+    fallback["include_reasoning"] = False
+    return fallback
 
 
 def _headers(cfg: Mapping[str, Any], api_key: str) -> dict[str, str]:
@@ -151,9 +178,11 @@ def _post_json(
     max_retries: int,
     retry_sleep_s: float,
 ) -> dict[str, Any]:
-    payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    current_body = dict(body)
+    retried_minimal_reasoning = False
     last_error: BaseException | None = None
     for attempt in range(max_retries + 1):
+        payload = json.dumps(current_body, ensure_ascii=False).encode("utf-8")
         req = request.Request(url, data=payload, headers=dict(headers), method="POST")
         try:
             with request.urlopen(req, timeout=timeout_s) as response:
@@ -164,6 +193,14 @@ def _post_json(
         except error.HTTPError as exc:
             body_text = exc.read().decode("utf-8", errors="replace")
             last_error = RuntimeError(f"OpenRouter HTTP {exc.code}: {body_text[:1000]}")
+            if (
+                not retried_minimal_reasoning
+                and exc.code in REASONING_FALLBACK_HTTP_STATUS
+                and _uses_disabled_reasoning(current_body)
+            ):
+                current_body = _minimal_reasoning_body(current_body)
+                retried_minimal_reasoning = True
+                continue
             if exc.code not in TRANSIENT_HTTP_STATUS or attempt >= max_retries:
                 raise last_error
             retry_after = exc.headers.get("retry-after")

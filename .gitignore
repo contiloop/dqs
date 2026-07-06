@@ -3,6 +3,7 @@
 021/
 .venv/
 artifacts/
+outputs/
 data/prepared/
 ref/
 .env
