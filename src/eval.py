@@ -718,37 +718,13 @@ def _build_eval_records(
         records.append(
             {
                 "id": row.get("id"),
-                "run_id": row.get("run_id"),
-                "eval_profile": row.get("eval_profile"),
                 "source": row.get("source"),
                 "target": row.get("target"),
                 "translation": row.get("translation"),
-                "source_tokens": row.get("source_tokens"),
-                "prompt": {
-                    "template_id": row.get("prompt_template_id"),
-                    "template_group": row.get("prompt_template_group"),
-                    "template_hash": row.get("prompt_template_hash"),
-                    "chat_template_applied": row.get("chat_template_applied"),
-                    "messages": row.get("prompt_messages", []),
-                },
-                "generation": {
-                    "status": row.get("status"),
-                    "finish_reason": row.get("finish_reason"),
-                    "generated_token_count": row.get("generated_token_count"),
-                    "error": row.get("error"),
-                    "usage": row.get("usage", {}),
-                    "provider": row.get("provider"),
-                    "raw_model": row.get("raw_model"),
-                    "reasoning": row.get("reasoning"),
-                    "reasoning_details": row.get("reasoning_details"),
-                },
-                "filter": {
-                    "enabled": row.get("degeneration_filter_enabled"),
-                    "label": row.get("degeneration_label"),
-                    "flags": row.get("degeneration_flags", []),
-                },
+                "template_id": row.get("prompt_template_id"),
                 "scores": scores_by_id.get(str(row.get("id", "")), {}),
-                "metadata": row.get("metadata", {}),
+                "filter_label": row.get("degeneration_label"),
+                "filter_flags": row.get("degeneration_flags", []),
             }
         )
     return records

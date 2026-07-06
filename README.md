@@ -321,10 +321,11 @@ eval_outputs.jsonl
 
 W&B logs compact curves only: SFT loss/LR from Trainer plus subset summary
 counts and eval metric means. `eval_records.jsonl` keeps the row-level canonical
-eval result, including source/reference/translation, prompt template id,
-generation status, filter label, and sentence-level metric scores. Full runtime
-config is in `effective_config.yaml`. Set `logging.save_all_step_artifacts=true`
-to also keep split eval request, translation, filter, and score JSONL files.
+eval result, including source/reference/translation, prompt template id, filter
+label, and sentence-level metric scores. Full runtime config is in
+`effective_config.yaml`, and generation details are in `eval_outputs.jsonl`. Set
+`logging.save_all_step_artifacts=true` to also keep split eval request,
+translation, filter, and score JSONL files.
 Subset W&B curves are kept compact: filtered rows, rows blocked from teacher
 selection by the student filter, selected-candidate mean QE, SFT rows, and
 teacher accepted-label ratios.
