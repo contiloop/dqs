@@ -38,6 +38,17 @@ data:
     weights: null
     fill_remainder_from_global: true
     allow_zero_weight_bucket_fill: false
+  length_bucket_sampling_profiles:
+    financial_3bucket_weighted:
+      quota_strategy: weighted
+      length_buckets:
+        - [1, 64]
+        - [65, 256]
+        - [257, 1280]
+      weights:
+        - 0.25
+        - 0.65
+        - 0.10
   length_buckets:
     - [1, 32]
     - [33, 64]

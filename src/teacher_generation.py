@@ -5,7 +5,7 @@ import os
 import random
 import re
 import time
-from collections import Counter
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -120,8 +120,247 @@ def _choose_provider(
     return providers[-1]
 
 
-def _chunks(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
-    return [rows[idx : idx + size] for idx in range(0, len(rows), size)]
+def _source_token_length(row: Mapping[str, Any]) -> int:
+    raw = row.get("source_tokens")
+    if isinstance(raw, bool):
+        raw = None
+    if isinstance(raw, int):
+        return max(0, raw)
+    if isinstance(raw, float):
+        return max(0, int(raw))
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return max(0, int(float(raw.strip())))
+        except ValueError:
+            pass
+    return max(1, len(str(row.get("source", "")).split()))
+
+
+def _length_buckets(cfg: Mapping[str, Any]) -> list[tuple[int, int]]:
+    raw = _get(cfg, "data.length_buckets", [])
+    buckets: list[tuple[int, int]] = []
+    if isinstance(raw, list):
+        for idx, item in enumerate(raw):
+            if not isinstance(item, list) or len(item) != 2:
+                raise SystemExit(f"data.length_buckets[{idx}] must be [min, max]")
+            low = int(item[0])
+            high = int(item[1])
+            if low > high:
+                raise SystemExit(f"data.length_buckets[{idx}] has min > max")
+            buckets.append((low, high))
+    if not buckets:
+        buckets = [(1, 1280)]
+    return buckets
+
+
+def _bucket_index_for_candidate(row: Mapping[str, Any], buckets: list[tuple[int, int]]) -> int:
+    length = _source_token_length(row)
+    for idx, (low, high) in enumerate(buckets):
+        if low <= length <= high:
+            return idx
+    if length < buckets[0][0]:
+        return 0
+    return len(buckets) - 1
+
+
+def _bucket_weights(cfg: Mapping[str, Any], bucket_count: int) -> list[float] | None:
+    raw = _get(cfg, "data.length_bucket_selection.weights")
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) != bucket_count:
+        raise SystemExit(
+            "data.length_bucket_selection.weights must be null or a list with "
+            f"{bucket_count} values"
+        )
+    weights = [max(0.0, float(value)) for value in raw]
+    if sum(weights) <= 0:
+        raise SystemExit("data.length_bucket_selection.weights must contain a positive weight")
+    return weights
+
+
+def _quota_from_weights(total: int, weights: list[float]) -> list[int]:
+    if total <= 0:
+        return [0 for _ in weights]
+    weight_sum = sum(weights)
+    if weight_sum <= 0:
+        raise SystemExit("cannot allocate length bucket quotas because all bucket weights are zero")
+    raw = [(total * weight / weight_sum) for weight in weights]
+    quotas = [int(value) for value in raw]
+    remainder = total - sum(quotas)
+    order = sorted(
+        range(len(weights)),
+        key=lambda idx: (-(raw[idx] - quotas[idx]), idx),
+    )
+    for idx in order[:remainder]:
+        quotas[idx] += 1
+    return quotas
+
+
+def _teacher_bucket_plan(
+    *,
+    cfg: Mapping[str, Any],
+    candidates: list[dict[str, Any]],
+    target: int,
+) -> dict[str, Any]:
+    selection_cfg = _get(cfg, "data.length_bucket_selection", {})
+    if not isinstance(selection_cfg, Mapping) or not bool(selection_cfg.get("enabled", True)):
+        return {
+            "enabled": False,
+            "buckets": [(0, 10**12)],
+            "bucket_counts": [len(candidates)],
+            "quotas": [target],
+            "quota_strategy": "disabled",
+            "explicit_weights": None,
+            "positive_weight_bucket_indexes": {0},
+            "allow_zero_weight_bucket_fill": True,
+            "fill_remainder_from_global": True,
+        }
+
+    buckets = _length_buckets(cfg)
+    bucket_counts = [0 for _ in buckets]
+    for candidate in candidates:
+        bucket_counts[_bucket_index_for_candidate(candidate, buckets)] += 1
+
+    explicit_weights = _bucket_weights(cfg, len(buckets))
+    quota_strategy = str(selection_cfg.get("quota_strategy", "proportional")).strip().lower()
+    if explicit_weights is not None:
+        weights = explicit_weights
+    elif quota_strategy == "uniform":
+        weights = [1.0 for _ in buckets]
+    elif quota_strategy == "proportional":
+        weights = [float(count) for count in bucket_counts]
+    else:
+        raise SystemExit("data.length_bucket_selection.quota_strategy must be uniform or proportional")
+
+    return {
+        "enabled": True,
+        "buckets": buckets,
+        "bucket_counts": bucket_counts,
+        "quotas": _quota_from_weights(target, weights),
+        "quota_strategy": quota_strategy,
+        "explicit_weights": explicit_weights,
+        "positive_weight_bucket_indexes": {
+            idx for idx, weight in enumerate(weights)
+            if weight > 0
+        },
+        "allow_zero_weight_bucket_fill": bool(selection_cfg.get("allow_zero_weight_bucket_fill", False)),
+        "fill_remainder_from_global": bool(selection_cfg.get("fill_remainder_from_global", True)),
+    }
+
+
+def _bucket_label(buckets: list[tuple[int, int]], bucket_idx: int) -> str:
+    low, high = buckets[bucket_idx]
+    return f"{low}-{high}"
+
+
+def _bucket_count_summary(
+    *,
+    buckets: list[tuple[int, int]],
+    counts: list[int],
+) -> dict[str, int]:
+    return {
+        _bucket_label(buckets, idx): int(count)
+        for idx, count in enumerate(counts)
+    }
+
+
+def _teacher_bucket_queues(
+    *,
+    candidates: list[dict[str, Any]],
+    buckets: list[tuple[int, int]],
+) -> list[deque[dict[str, Any]]]:
+    queues: list[deque[dict[str, Any]]] = [deque() for _ in buckets]
+    sorted_candidates = sorted(candidates, key=lambda row: int(row.get("selection_rank", 10**12)))
+    for candidate in sorted_candidates:
+        bucket_idx = _bucket_index_for_candidate(candidate, buckets)
+        queued = dict(candidate)
+        queued["_teacher_bucket_idx"] = bucket_idx
+        queued["_teacher_bucket"] = _bucket_label(buckets, bucket_idx)
+        queues[bucket_idx].append(queued)
+    return queues
+
+
+def _choose_teacher_bucket(
+    *,
+    bucket_queues: list[deque[dict[str, Any]]],
+    quotas: list[int],
+    accepted_counts: list[int],
+    scheduled_counts: list[int],
+    fill_remainder_from_global: bool,
+    explicit_weights: list[float] | None,
+    positive_weight_bucket_indexes: set[int],
+    allow_zero_weight_bucket_fill: bool,
+) -> tuple[int, bool] | None:
+    needed: list[int] = []
+    for bucket_idx, queue in enumerate(bucket_queues):
+        if not queue:
+            continue
+        if accepted_counts[bucket_idx] + scheduled_counts[bucket_idx] < quotas[bucket_idx]:
+            needed.append(bucket_idx)
+    if needed:
+        return min(
+            needed,
+            key=lambda idx: (
+                (accepted_counts[idx] + scheduled_counts[idx]) / max(quotas[idx], 1),
+                idx,
+            ),
+        ), False
+
+    if not fill_remainder_from_global:
+        return None
+
+    fallback: list[int] = []
+    for bucket_idx, queue in enumerate(bucket_queues):
+        if not queue:
+            continue
+        if explicit_weights is not None and not allow_zero_weight_bucket_fill:
+            if bucket_idx not in positive_weight_bucket_indexes:
+                continue
+        fallback.append(bucket_idx)
+    if not fallback:
+        return None
+
+    return min(
+        fallback,
+        key=lambda idx: (
+            float(bucket_queues[idx][0].get("qe_score", 0.0)),
+            str(bucket_queues[idx][0].get("id", "")),
+            idx,
+        ),
+    ), True
+
+
+def _pop_teacher_batch_rows(
+    *,
+    bucket_queues: list[deque[dict[str, Any]]],
+    quotas: list[int],
+    accepted_counts: list[int],
+    scheduled_counts: list[int],
+    batch_size: int,
+    fill_remainder_from_global: bool,
+    explicit_weights: list[float] | None,
+    positive_weight_bucket_indexes: set[int],
+    allow_zero_weight_bucket_fill: bool,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for _ in range(batch_size):
+        choice = _choose_teacher_bucket(
+            bucket_queues=bucket_queues,
+            quotas=quotas,
+            accepted_counts=accepted_counts,
+            scheduled_counts=scheduled_counts,
+            fill_remainder_from_global=fill_remainder_from_global,
+            explicit_weights=explicit_weights,
+            positive_weight_bucket_indexes=positive_weight_bucket_indexes,
+            allow_zero_weight_bucket_fill=allow_zero_weight_bucket_fill,
+        )
+        if choice is None:
+            break
+        bucket_idx, _ = choice
+        candidate = bucket_queues[bucket_idx].popleft()
+        scheduled_counts[bucket_idx] += 1
+        rows.append(candidate)
+    return rows
 
 
 def _candidate_item(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -606,29 +845,49 @@ def run_teacher_generation(
     teacher_filter_enabled = bool(filter_cfg.get("enabled", True)) and bool(filter_cfg.get("teacher_enabled", True))
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    sorted_candidates = sorted(candidates, key=lambda row: int(row.get("selection_rank", 10**12)))
-    batches = _chunks(sorted_candidates, batch_size)
+    bucket_plan = _teacher_bucket_plan(cfg=cfg, candidates=candidates, target=target)
+    buckets = bucket_plan["buckets"]
+    quotas = list(bucket_plan["quotas"])
+    accepted_bucket_counts = [0 for _ in buckets]
+    requested_bucket_counts = [0 for _ in buckets]
+    bucket_queues = _teacher_bucket_queues(candidates=candidates, buckets=buckets)
+    estimated_batches = (len(candidates) + batch_size - 1) // batch_size
     progress(
         "teacher start",
         candidates=len(candidates),
-        batches=len(batches),
+        batches=estimated_batches,
         target=target,
         batch_size=batch_size,
         max_workers=max_workers,
+        bucket_strategy=bucket_plan["quota_strategy"],
     )
     called_batches = 0
     requested_candidate_rows = 0
-    batch_cursor = 0
-    batch_window = max_workers if refill_until_target else max(len(batches), 1)
+    batch_idx_cursor = 0
+    batch_window = max_workers if refill_until_target else max(estimated_batches, 1)
 
-    while batch_cursor < len(batches):
+    while any(bucket_queues):
         if refill_until_target and len(accepted) >= target:
             break
-        window_batches = batches[batch_cursor : batch_cursor + batch_window]
+        scheduled_bucket_counts = [0 for _ in buckets]
         batch_inputs: list[tuple[int, dict[str, Any], str, str, list[dict[str, Any]], set[str]]] = []
         batch_rows_by_idx: dict[int, list[dict[str, Any]]] = {}
-        for offset, batch_rows in enumerate(window_batches):
-            batch_idx = batch_cursor + offset
+        for _ in range(batch_window):
+            batch_rows = _pop_teacher_batch_rows(
+                bucket_queues=bucket_queues,
+                quotas=quotas,
+                accepted_counts=accepted_bucket_counts,
+                scheduled_counts=scheduled_bucket_counts,
+                batch_size=batch_size,
+                fill_remainder_from_global=bool(bucket_plan["fill_remainder_from_global"]),
+                explicit_weights=bucket_plan["explicit_weights"],
+                positive_weight_bucket_indexes=bucket_plan["positive_weight_bucket_indexes"],
+                allow_zero_weight_bucket_fill=bool(bucket_plan["allow_zero_weight_bucket_fill"]),
+            )
+            if not batch_rows:
+                break
+            batch_idx = batch_idx_cursor
+            batch_idx_cursor += 1
             items = [_candidate_item(row) for row in batch_rows]
             provider = _choose_provider(providers, seed=seed, batch_idx=batch_idx)
             user_prompt = _render_user_prompt(user_template, items)
@@ -646,10 +905,15 @@ def run_teacher_generation(
             )
             batch_inputs.append((batch_idx, provider, system_prompt, user_prompt, batch_rows, expected_ids))
             batch_rows_by_idx[batch_idx] = batch_rows
+            for candidate in batch_rows:
+                bucket_idx = int(candidate.get("_teacher_bucket_idx", 0))
+                requested_bucket_counts[bucket_idx] += 1
+        if not batch_inputs:
+            break
 
         with progress_context(
             "teacher api-window",
-            start_batch=batch_cursor,
+            start_batch=called_batches,
             batches=len(batch_inputs),
             accepted=len(accepted),
         ):
@@ -674,6 +938,7 @@ def run_teacher_generation(
             for candidate in batch_rows:
                 if refill_until_target and len(accepted) >= target:
                     break
+                bucket_idx = int(candidate.get("_teacher_bucket_idx", 0))
                 item = parsed_by_id.get(str(candidate["id"]))
                 if item is None:
                     rejected.append(_reject_row(candidate, reason="missing_or_unparsed_teacher_item", flags=[]))
@@ -696,9 +961,9 @@ def run_teacher_generation(
                     if label != "clean":
                         rejected.append(_reject_row(candidate, reason=f"teacher_{label}", flags=flags, item=item))
                         continue
+                accepted_bucket_counts[bucket_idx] += 1
                 accepted.append(_accept_row(candidate, item=item, rank=len(accepted) + 1))
 
-        batch_cursor += len(window_batches)
         progress(
             "teacher window processed",
             requested=requested_candidate_rows,
@@ -746,7 +1011,7 @@ def run_teacher_generation(
     label_summary = _teacher_label_summary(accepted)
     summary = {
         "teacher_candidate_rows": len(candidates),
-        "teacher_candidate_batches": len(batches),
+        "teacher_candidate_batches": estimated_batches,
         "teacher_batches": called_batches,
         "teacher_requested_candidate_rows": requested_candidate_rows,
         "teacher_skipped_candidate_rows": max(0, len(candidates) - requested_candidate_rows),
@@ -756,6 +1021,20 @@ def run_teacher_generation(
         "teacher_label_ratios": label_summary["label_ratios"],
         "teacher_reject_reason_counts": rejection_counts["reject_reason_counts"],
         "teacher_reject_flag_counts": rejection_counts["reject_flag_counts"],
+        "teacher_bucket_quota_strategy": bucket_plan["quota_strategy"],
+        "teacher_bucket_candidate_counts": _bucket_count_summary(
+            buckets=buckets,
+            counts=list(bucket_plan["bucket_counts"]),
+        ),
+        "teacher_bucket_target_quotas": _bucket_count_summary(buckets=buckets, counts=quotas),
+        "teacher_bucket_requested_counts": _bucket_count_summary(
+            buckets=buckets,
+            counts=requested_bucket_counts,
+        ),
+        "teacher_bucket_accepted_counts": _bucket_count_summary(
+            buckets=buckets,
+            counts=accepted_bucket_counts,
+        ),
         "teacher_target_rows": target,
         "teacher_shortfall_rows": shortfall,
         "teacher_exhausted_candidate_pool": bool(shortfall and requested_candidate_rows >= len(candidates)),
