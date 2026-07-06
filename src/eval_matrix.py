@@ -14,6 +14,23 @@ import yaml
 from io_utils import write_jsonl
 from progress import progress
 
+SUMMARY_COLUMNS = [
+    "slug",
+    "model",
+    "provider",
+    "output_dir",
+    "rows",
+    "generation_ok_rows",
+    "filter_pass_rows",
+    "filter_fail_rows",
+    "filter_fail_ratio",
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "cost_usd",
+    "dry_run",
+]
+
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
@@ -43,6 +60,13 @@ def _selected_models(models: list[dict[str, Any]], selected: str | None) -> list
     if selected:
         wanted = [item.strip() for item in selected.split(",") if item.strip()]
         by_slug = {str(model["slug"]): model for model in models}
+        for model in models:
+            aliases = model.get("aliases", [])
+            if isinstance(aliases, list):
+                for alias in aliases:
+                    alias = str(alias).strip()
+                    if alias:
+                        by_slug[alias] = model
         missing = sorted(set(wanted) - set(by_slug))
         if missing:
             raise SystemExit(f"unknown model slug(s): {', '.join(missing)}")
@@ -131,7 +155,7 @@ def _write_summary(root: Path, rows: list[dict[str, Any]]) -> None:
     write_jsonl(root / "summary.jsonl", rows)
     if not rows:
         return
-    fieldnames: list[str] = []
+    fieldnames: list[str] = [key for key in SUMMARY_COLUMNS if any(key in row for row in rows)]
     for row in rows:
         for key in row:
             if key not in fieldnames:
@@ -141,6 +165,37 @@ def _write_summary(root: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
+
+
+def _load_summary(root: Path) -> list[dict[str, Any]]:
+    path = root / "summary.jsonl"
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            if isinstance(payload, dict):
+                rows.append(payload)
+    return rows
+
+
+def _upsert_summary_row(rows: list[dict[str, Any]], row: dict[str, Any]) -> list[dict[str, Any]]:
+    key = str(row.get("slug", ""))
+    out: list[dict[str, Any]] = []
+    replaced = False
+    for existing in rows:
+        if str(existing.get("slug", "")) == key:
+            out.append(row)
+            replaced = True
+        else:
+            out.append(existing)
+    if not replaced:
+        out.append(row)
+    return out
 
 
 def _eval_cmd(
@@ -235,14 +290,13 @@ def run(args: argparse.Namespace) -> None:
     if not isinstance(openrouter, Mapping):
         raise SystemExit("matrix config `openrouter` must be a mapping")
     models = _selected_models(_as_model_list(payload), args.models)
-    output_root = Path(args.output_dir or str(suite.get("output_dir", "outputs/results/openrouter_api")))
-    profile = str(args.profile or suite.get("eval_profile", "final"))
+    output_root = Path(args.output_dir or str(suite.get("output_dir", "outputs/results")))
     metric_ids = [item.strip() for item in str(args.metrics or suite.get("metrics", "bleu,chrf")).split(",") if item.strip()]
 
-    rows: list[dict[str, Any]] = []
+    rows = _load_summary(output_root)
     for model in models:
         slug = str(model["slug"])
-        output_dir = output_root / slug / profile
+        output_dir = output_root / slug
         progress("eval matrix model start", slug=slug, model=model["model"], output_dir=output_dir)
         cmd = _eval_cmd(
             args=args,
@@ -254,7 +308,10 @@ def run(args: argparse.Namespace) -> None:
         subprocess.run(cmd, check=True)
         summary_path = output_dir / "eval_summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        rows.append(_summary_row(model=model, summary=summary, output_dir=output_dir, metric_ids=metric_ids))
+        rows = _upsert_summary_row(
+            rows,
+            _summary_row(model=model, summary=summary, output_dir=output_dir, metric_ids=metric_ids),
+        )
         _write_summary(output_root, rows)
         progress("eval matrix model done", slug=slug, output_dir=output_dir)
 

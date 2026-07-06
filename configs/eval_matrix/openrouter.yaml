@@ -2,7 +2,7 @@ suite:
   name: openrouter_api
   eval_config: configs/config.yaml
   eval_profile: final
-  output_dir: outputs/results/openrouter_api
+  output_dir: outputs/results
   metrics: bleu,chrf
   max_new_tokens: 1024
   temperature: 0.0
@@ -39,7 +39,9 @@ models:
     prompt_price_per_mtok_usd: 0.0
     completion_price_per_mtok_usd: 0.0
 
-  - slug: qwen35_9b
+  - slug: qwen3.5_9b
+    aliases:
+      - qwen35_9b
     model: qwen/qwen3.5-9b
     family: qwen3.5
     size: 9b
@@ -63,7 +65,9 @@ models:
     prompt_price_per_mtok_usd: 0.12
     completion_price_per_mtok_usd: 0.35
 
-  - slug: qwen35_35b_a3b
+  - slug: qwen3.5_35b_a3b
+    aliases:
+      - qwen35_35b_a3b
     model: qwen/qwen3.5-35b-a3b
     family: qwen3.5
     size: 35b_a3b
@@ -71,7 +75,9 @@ models:
     prompt_price_per_mtok_usd: 0.14
     completion_price_per_mtok_usd: 1.00
 
-  - slug: qwen35_27b
+  - slug: qwen3.5_27b
+    aliases:
+      - qwen35_27b
     model: qwen/qwen3.5-27b
     family: qwen3.5
     size: 27b
@@ -79,7 +85,9 @@ models:
     prompt_price_per_mtok_usd: 0.195
     completion_price_per_mtok_usd: 1.56
 
-  - slug: qwen35_122b_a10b
+  - slug: qwen3.5_122b_a10b
+    aliases:
+      - qwen35_122b_a10b
     model: qwen/qwen3.5-122b-a10b
     family: qwen3.5
     size: 122b_a10b
@@ -87,7 +95,9 @@ models:
     prompt_price_per_mtok_usd: 0.26
     completion_price_per_mtok_usd: 2.08
 
-  - slug: qwen35_397b_a17b
+  - slug: qwen3.5_397b_a17b
+    aliases:
+      - qwen35_397b_a17b
     model: qwen/qwen3.5-397b-a17b
     family: qwen3.5
     size: 397b_a17b
