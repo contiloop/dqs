@@ -56,6 +56,16 @@ def _override(key: str, value: Any) -> str:
     return f"{key}={value}"
 
 
+def _append_mapping_overrides(overrides: list[str], prefix: str, values: Any) -> None:
+    if not isinstance(values, Mapping):
+        return
+    for key, value in values.items():
+        if isinstance(value, Mapping):
+            _append_mapping_overrides(overrides, f"{prefix}.{key}", value)
+        else:
+            overrides.append(_override(f"{prefix}.{key}", value))
+
+
 def _metric_value(summary: Mapping[str, Any], metric_id: str) -> Any:
     metrics = summary.get("metrics", {})
     if not isinstance(metrics, Mapping):
@@ -180,6 +190,8 @@ def _eval_cmd(
     reasoning_effort = model.get("reasoning_effort", suite.get("reasoning_effort"))
     if reasoning_effort:
         overrides.append(_override("inference.openrouter.reasoning_effort", reasoning_effort))
+    reasoning = model.get("reasoning", openrouter.get("reasoning"))
+    _append_mapping_overrides(overrides, "inference.openrouter.reasoning", reasoning)
     app_name = openrouter.get("app_name")
     if app_name:
         overrides.append(_override("inference.openrouter.app_name", app_name))

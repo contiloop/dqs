@@ -16,6 +16,9 @@ openrouter:
   timeout_s: 120
   max_retries: 5
   retry_sleep_s: 2.0
+  reasoning:
+    effort: none
+    exclude: true
 
 models:
   - slug: gemma4_26b_a4b_free

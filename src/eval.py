@@ -467,6 +467,8 @@ def _materialize_eval_translations(
                 "usage": response.get("usage", {}),
                 "provider": response.get("provider"),
                 "raw_model": response.get("model"),
+                "reasoning": response.get("reasoning"),
+                "reasoning_details": response.get("reasoning_details"),
             }
         )
     return out_rows
@@ -737,6 +739,8 @@ def _build_eval_records(
                     "usage": row.get("usage", {}),
                     "provider": row.get("provider"),
                     "raw_model": row.get("raw_model"),
+                    "reasoning": row.get("reasoning"),
+                    "reasoning_details": row.get("reasoning_details"),
                 },
                 "filter": {
                     "enabled": row.get("degeneration_filter_enabled"),

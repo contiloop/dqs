@@ -120,7 +120,8 @@ def _request_body(row: Mapping[str, Any]) -> dict[str, Any]:
         body["reasoning"] = dict(reasoning)
     reasoning_effort = str(cfg.get("reasoning_effort", "") or "").strip()
     if reasoning_effort:
-        body["reasoning"] = {"effort": reasoning_effort}
+        body["reasoning"] = dict(body.get("reasoning", {}))
+        body["reasoning"]["effort"] = reasoning_effort
     extra_body = cfg.get("extra_body", {})
     if isinstance(extra_body, Mapping):
         body = _deep_merge(body, extra_body)
@@ -197,6 +198,8 @@ def _run_one(
     generation = choices[0] if isinstance(choices, list) and choices else {}
     message = generation.get("message", {}) if isinstance(generation, Mapping) else {}
     content = message.get("content") if isinstance(message, Mapping) else None
+    reasoning = message.get("reasoning") if isinstance(message, Mapping) else None
+    reasoning_details = message.get("reasoning_details") if isinstance(message, Mapping) else None
     text = _normalize_content(content)
     usage = _usage(payload)
     return {
@@ -210,6 +213,8 @@ def _run_one(
         "usage": usage,
         "provider": _get(payload, "provider.name"),
         "model": payload.get("model"),
+        "reasoning": reasoning,
+        "reasoning_details": reasoning_details,
         "error": None if text else "OpenRouter generation returned empty translation",
     }
 
