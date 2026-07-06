@@ -787,8 +787,14 @@ def _sft_wandb_payload(logs: Mapping[str, Any], *, subset_idx: int, global_step:
         "subset/index": subset_idx,
         "sft/subset_idx": subset_idx,
     }
+    ignored_log_keys = {
+        "train_runtime",
+        "train_samples_per_second",
+        "train_steps_per_second",
+        "total_flos",
+    }
     for key, value in logs.items():
-        if key == "step" or isinstance(value, bool) or not isinstance(value, (int, float)):
+        if key == "step" or key in ignored_log_keys or isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
         payload[f"train/{key}"] = float(value)
     return payload

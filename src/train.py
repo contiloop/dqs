@@ -1301,6 +1301,12 @@ def _mean_qe_score(rows: list[dict[str, Any]]) -> float | None:
     return sum(scores) / len(scores)
 
 
+def _mean_qe_score_from_file(path: Path) -> float | None:
+    if not path.exists():
+        return None
+    return _mean_qe_score(read_jsonl(path))
+
+
 def _read_json_if_exists(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -2013,6 +2019,7 @@ def main() -> None:
             {},
         ),
         "selected_for_teacher_rows": len(selected_rows),
+        "all_qe_score_mean": _mean_qe_score_from_file(subset_dir / "qe_scores.jsonl"),
         "selected_qe_score_mean": _mean_qe_score(selected_rows),
         "teacher_accepted_rows": teacher_summary.get("teacher_accepted_rows", 0),
         "teacher_rejected_rows": teacher_summary.get("teacher_rejected_rows", 0),
