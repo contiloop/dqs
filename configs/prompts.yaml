@@ -13,4 +13,4 @@ prompts:
   evaluation:
     random_template: false
     base_template_id: base_tem_001
-    instruct_template_id: instruct_tem_002
+    instruct_template_id: instruct_tem_003
