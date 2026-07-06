@@ -152,7 +152,10 @@ def log_wandb_metrics(
         if isinstance(value, (int, float, str, bool)) or value is None
     }
     try:
-        run.log(payload, step=step)
+        # Use explicit metric columns such as train/global_step, subset/index, and
+        # checkpoint/step as chart axes. Passing wandb's internal step directly can
+        # hide later subset/eval logs when separate resumed processes reuse a step.
+        run.log(payload)
         if finish:
             run.finish()
     except Exception as exc:
