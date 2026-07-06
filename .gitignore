@@ -1,4 +1,6 @@
 .DS_Store
+.021_download_tmp/
+021/
 .venv/
 artifacts/
 data/prepared/
