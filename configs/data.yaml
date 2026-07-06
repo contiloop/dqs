@@ -65,7 +65,7 @@ data:
     student_require_valid_output: true
     reject_repetition: true
     reject_thinking_trace: true
-    reject_foreign_passthrough: true
+    reject_foreign_passthrough: false
     reject_english_passthrough: true
     reject_wrong_script_heavy: true
     reject_wrong_script_light: true
@@ -90,8 +90,8 @@ data:
       sentence_source_token_overlap_min: 0.55
     wrong_script_light:
       min_text_chars: 30
-      wrong_script_char_count_min: 1
-      mixed_script_token_count_min: 1
+      wrong_script_char_count_min: 3
+      mixed_script_token_count_min: 999999
     repetition:
       max_analysis_chars: 6000
       max_analysis_tokens: 500

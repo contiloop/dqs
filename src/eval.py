@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from collections import Counter
 import json
 import shutil
@@ -31,6 +32,28 @@ def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
             return default
         cursor = cursor[part]
     return cursor
+
+
+def _deep_merge_mapping(base: Mapping[str, Any], overrides: Mapping[str, Any]) -> dict[str, Any]:
+    merged = copy.deepcopy(dict(base))
+    for key, value in overrides.items():
+        if isinstance(value, Mapping) and isinstance(merged.get(key), Mapping):
+            merged[key] = _deep_merge_mapping(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _eval_filter_config(cfg: Mapping[str, Any]) -> dict[str, Any]:
+    filter_cfg = _get(cfg, "data.degeneration_filter", {})
+    if not isinstance(filter_cfg, Mapping):
+        filter_cfg = {}
+    overrides = _get(cfg, "eval.filter.degeneration_filter_overrides", {})
+    if overrides is None:
+        overrides = {}
+    if not isinstance(overrides, Mapping):
+        raise SystemExit("eval.filter.degeneration_filter_overrides must be a mapping")
+    return _deep_merge_mapping(filter_cfg, overrides)
 
 
 def _save_all_step_artifacts(cfg: Mapping[str, Any]) -> bool:
@@ -414,9 +437,7 @@ def _materialize_eval_translations(
 
 def _filter_eval_rows(cfg: Mapping[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     filter_enabled = bool(_get(cfg, "eval.filter.enabled", True))
-    filter_cfg = _get(cfg, "data.degeneration_filter", {})
-    if not isinstance(filter_cfg, Mapping):
-        filter_cfg = {}
+    filter_cfg = _eval_filter_config(cfg)
     out_rows: list[dict[str, Any]] = []
     for row in rows:
         if filter_enabled:

@@ -16,6 +16,9 @@ eval:
     gpu_memory_utilization: ${inference.gpu_memory_utilization}
   filter:
     enabled: true
+    degeneration_filter_overrides:
+      wrong_script_light:
+        wrong_script_char_count_min: 2
   metrics:
     - id: bleu
       backend: sacrebleu
