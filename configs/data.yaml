@@ -50,14 +50,9 @@ data:
         - 0.65
         - 0.10
   length_buckets:
-    - [1, 32]
-    - [33, 64]
-    - [65, 128]
-    - [129, 256]
-    - [257, 512]
-    - [513, 768]
-    - [769, 1024]
-    - [1025, 1280]
+    - [1, 64]
+    - [65, 256]
+    - [257, 1280]
   degeneration_filter:
     enabled: true
     student_enabled: true
