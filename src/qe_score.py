@@ -102,7 +102,7 @@ def _run_comet_subprocess(
             "    gpus = 0\n"
             f"data = json.loads(open({str(input_path)!r}, encoding='utf-8').read())\n"
             f"model = load_from_checkpoint(download_model({model_name!r}))\n"
-            f"pred = model.predict(data, batch_size={int(batch_size)}, gpus=gpus)\n"
+            f"pred = model.predict(data, batch_size={int(batch_size)}, gpus=gpus, num_workers=1)\n"
             "scores = pred.get('scores') if isinstance(pred, dict) else getattr(pred, 'scores', None)\n"
             f"open({str(output_path)!r}, 'w', encoding='utf-8').write(json.dumps(scores))\n"
         )
