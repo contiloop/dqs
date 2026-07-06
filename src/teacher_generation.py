@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, ValidationError
 from degeneration_filter import classify_student_output
 from io_utils import write_jsonl
 from progress import progress, progress_context
+from text_tokenization import text_token_ids
 
 
 TeacherLabel = Literal["no_change", "minor", "major", "critical", "invalid"]
@@ -79,6 +80,26 @@ def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
 
 def _read_text(path: str | Path) -> str:
     return Path(path).read_text(encoding="utf-8")
+
+
+def _load_translation_tokenizer(cfg: Mapping[str, Any]) -> Any:
+    try:
+        from transformers import AutoTokenizer
+    except ModuleNotFoundError as exc:
+        raise SystemExit("missing transformers; run `make set` first") from exc
+
+    model_cfg = _get(cfg, "model", {})
+    if not isinstance(model_cfg, Mapping):
+        raise SystemExit("model config must be a mapping")
+    return AutoTokenizer.from_pretrained(
+        str(model_cfg["name_or_path"]),
+        revision=str(model_cfg.get("tokenizer_revision", "main")),
+        trust_remote_code=bool(model_cfg.get("trust_remote_code", False)),
+    )
+
+
+def _translation_token_count(tokenizer: Any, text: str) -> int:
+    return len(text_token_ids(tokenizer, text, add_special_tokens=False))
 
 
 def _save_all_step_artifacts(cfg: Mapping[str, Any]) -> bool:
@@ -827,6 +848,11 @@ def run_teacher_generation(
     max_workers = max(1, int(teacher_cfg.get("max_workers", 20) or 20))
     max_retries = max(1, int(teacher_cfg.get("max_retries_per_row", 3) or 3))
     max_output_tokens = max(512, int(teacher_cfg.get("max_output_tokens", 8192) or 8192))
+    reject_over_max_output_tokens = bool(teacher_cfg.get("reject_over_max_output_tokens", True))
+    target_max_output_tokens = max(
+        1,
+        int(teacher_cfg.get("target_max_output_tokens", _get(cfg, "data.max_output_tokens", 1500)) or 1500),
+    )
     temperature = float(teacher_cfg.get("temperature", 0.0) or 0.0)
     refill_until_target = bool(teacher_cfg.get("refill_until_target", True))
     abort_on_all_failed_window = bool(teacher_cfg.get("abort_on_all_failed_window", True))
@@ -843,6 +869,7 @@ def run_teacher_generation(
     if not isinstance(filter_cfg, Mapping):
         filter_cfg = {}
     teacher_filter_enabled = bool(filter_cfg.get("enabled", True)) and bool(filter_cfg.get("teacher_enabled", True))
+    translation_tokenizer = _load_translation_tokenizer(cfg) if reject_over_max_output_tokens else None
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     bucket_plan = _teacher_bucket_plan(cfg=cfg, candidates=candidates, target=target)
@@ -860,6 +887,7 @@ def run_teacher_generation(
         batch_size=batch_size,
         max_workers=max_workers,
         bucket_strategy=bucket_plan["quota_strategy"],
+        target_max_output_tokens=target_max_output_tokens if reject_over_max_output_tokens else "disabled",
     )
     called_batches = 0
     requested_candidate_rows = 0
@@ -950,6 +978,23 @@ def run_teacher_generation(
                 if not translation:
                     rejected.append(_reject_row(candidate, reason="empty_teacher_translation", flags=["empty"], item=item))
                     continue
+                translation_tokens = None
+                if translation_tokenizer is not None:
+                    translation_tokens = _translation_token_count(translation_tokenizer, translation)
+                    if translation_tokens > target_max_output_tokens:
+                        rejected.append(
+                            _reject_row(
+                                candidate,
+                                reason="teacher_output_too_long",
+                                flags=["teacher_output_too_long"],
+                                item=item,
+                                extra={
+                                    "teacher_translation_tokens": translation_tokens,
+                                    "teacher_max_output_tokens": target_max_output_tokens,
+                                },
+                            )
+                        )
+                        continue
                 if teacher_filter_enabled:
                     label, flags = classify_student_output(
                         source=str(candidate.get("source", "")),
@@ -962,7 +1007,14 @@ def run_teacher_generation(
                         rejected.append(_reject_row(candidate, reason=f"teacher_{label}", flags=flags, item=item))
                         continue
                 accepted_bucket_counts[bucket_idx] += 1
-                accepted.append(_accept_row(candidate, item=item, rank=len(accepted) + 1))
+                accepted.append(
+                    _accept_row(
+                        candidate,
+                        item=item,
+                        rank=len(accepted) + 1,
+                        teacher_translation_tokens=translation_tokens,
+                    )
+                )
 
         progress(
             "teacher window processed",
@@ -1040,6 +1092,8 @@ def run_teacher_generation(
         "teacher_exhausted_candidate_pool": bool(shortfall and requested_candidate_rows >= len(candidates)),
         "teacher_refill_until_target": refill_until_target,
         "teacher_degeneration_filter_enabled": teacher_filter_enabled,
+        "teacher_reject_over_max_output_tokens": reject_over_max_output_tokens,
+        "teacher_target_max_output_tokens": target_max_output_tokens,
     }
     (subset_dir / "teacher_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
@@ -1067,8 +1121,9 @@ def _reject_row(
     reason: str,
     flags: list[str],
     item: TeacherOutputItem | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    row = {
         "id": candidate["id"],
         "source": candidate.get("source", ""),
         "student_translation": candidate.get("student_translation", ""),
@@ -1080,6 +1135,9 @@ def _reject_row(
         "reject_reason": reason,
         "reject_flags": flags,
     }
+    if extra:
+        row.update(dict(extra))
+    return row
 
 
 def _accept_row(
@@ -1087,6 +1145,7 @@ def _accept_row(
     *,
     item: TeacherOutputItem,
     rank: int,
+    teacher_translation_tokens: int | None = None,
 ) -> dict[str, Any]:
     return {
         "id": candidate["id"],
@@ -1096,6 +1155,7 @@ def _accept_row(
         "teacher_label": item.label,
         "teacher_errors": _item_errors(item),
         "teacher_accept_rank": rank,
+        "teacher_translation_tokens": teacher_translation_tokens,
         "qe_score": candidate.get("qe_score"),
         "selection_rank": candidate.get("selection_rank"),
         "prompt": candidate.get("prompt"),
