@@ -179,6 +179,13 @@ def _post_json(
     raise RuntimeError(f"OpenRouter request failed: {last_error}")
 
 
+def _excludes_reasoning(body: Mapping[str, Any]) -> bool:
+    if body.get("include_reasoning") is False:
+        return True
+    reasoning = body.get("reasoning")
+    return isinstance(reasoning, Mapping) and reasoning.get("exclude") is True
+
+
 def _run_one(
     *,
     row: Mapping[str, Any],
@@ -188,10 +195,11 @@ def _run_one(
     max_retries: int,
     retry_sleep_s: float,
 ) -> dict[str, Any]:
+    request_body = _request_body(row)
     payload = _post_json(
         url=url,
         headers=headers,
-        body=_request_body(row),
+        body=request_body,
         timeout_s=timeout_s,
         max_retries=max_retries,
         retry_sleep_s=retry_sleep_s,
@@ -200,8 +208,12 @@ def _run_one(
     generation = choices[0] if isinstance(choices, list) and choices else {}
     message = generation.get("message", {}) if isinstance(generation, Mapping) else {}
     content = message.get("content") if isinstance(message, Mapping) else None
-    reasoning = message.get("reasoning") if isinstance(message, Mapping) else None
-    reasoning_details = message.get("reasoning_details") if isinstance(message, Mapping) else None
+    if _excludes_reasoning(request_body):
+        reasoning = None
+        reasoning_details = None
+    else:
+        reasoning = message.get("reasoning") if isinstance(message, Mapping) else None
+        reasoning_details = message.get("reasoning_details") if isinstance(message, Mapping) else None
     text = _normalize_content(content)
     usage = _usage(payload)
     return {

@@ -110,6 +110,10 @@ models:
     family: openai
     size: mini
     variant: api
+    reasoning_effort: none
+    reasoning:
+      effort: none
+      exclude: true
     prompt_price_per_mtok_usd: 0.75
     completion_price_per_mtok_usd: 4.50
 
@@ -118,6 +122,10 @@ models:
     family: gemini
     size: flash
     variant: api
+    reasoning_effort: minimal
+    reasoning:
+      effort: minimal
+      exclude: true
     prompt_price_per_mtok_usd: 1.50
     completion_price_per_mtok_usd: 9.00
 
@@ -126,6 +134,10 @@ models:
     family: claude
     size: sonnet5
     variant: api
+    reasoning_effort: null
+    reasoning:
+      enabled: false
+      exclude: true
     prompt_price_per_mtok_usd: 2.00
     completion_price_per_mtok_usd: 10.00
 
@@ -134,6 +146,10 @@ models:
     family: gemini
     size: pro
     variant: api_preview
+    reasoning_effort: low
+    reasoning:
+      effort: low
+      exclude: true
     prompt_price_per_mtok_usd: 2.00
     completion_price_per_mtok_usd: 12.00
 
@@ -142,6 +158,10 @@ models:
     family: claude
     size: opus4.8
     variant: api
+    reasoning_effort: null
+    reasoning:
+      enabled: false
+      exclude: true
     prompt_price_per_mtok_usd: 5.00
     completion_price_per_mtok_usd: 25.00
 
@@ -150,5 +170,9 @@ models:
     family: openai
     size: flagship
     variant: api
+    reasoning_effort: none
+    reasoning:
+      effort: none
+      exclude: true
     prompt_price_per_mtok_usd: 5.00
     completion_price_per_mtok_usd: 30.00

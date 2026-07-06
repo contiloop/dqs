@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import fcntl
 import json
 from pathlib import Path
 import subprocess
 import sys
+from contextlib import contextmanager
 from typing import Any, Mapping
 
 import yaml
@@ -167,6 +169,18 @@ def _write_summary(root: Path, rows: list[dict[str, Any]]) -> None:
             writer.writerow(row)
 
 
+@contextmanager
+def _summary_lock(root: Path):
+    root.mkdir(parents=True, exist_ok=True)
+    lock_path = root / ".summary.lock"
+    with lock_path.open("w", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _load_summary(root: Path) -> list[dict[str, Any]]:
     path = root / "summary.jsonl"
     if not path.exists():
@@ -196,6 +210,18 @@ def _upsert_summary_row(rows: list[dict[str, Any]], row: dict[str, Any]) -> list
     if not replaced:
         out.append(row)
     return out
+
+
+def _load_summary_locked(root: Path) -> list[dict[str, Any]]:
+    with _summary_lock(root):
+        return _load_summary(root)
+
+
+def _upsert_summary_row_locked(root: Path, row: dict[str, Any]) -> list[dict[str, Any]]:
+    with _summary_lock(root):
+        rows = _upsert_summary_row(_load_summary(root), row)
+        _write_summary(root, rows)
+        return rows
 
 
 def _eval_cmd(
@@ -293,7 +319,7 @@ def run(args: argparse.Namespace) -> None:
     output_root = Path(args.output_dir or str(suite.get("output_dir", "outputs/results")))
     metric_ids = [item.strip() for item in str(args.metrics or suite.get("metrics", "bleu,chrf")).split(",") if item.strip()]
 
-    rows = _load_summary(output_root)
+    rows: list[dict[str, Any]] = []
     for model in models:
         slug = str(model["slug"])
         output_dir = output_root / slug
@@ -308,14 +334,13 @@ def run(args: argparse.Namespace) -> None:
         subprocess.run(cmd, check=True)
         summary_path = output_dir / "eval_summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        rows = _upsert_summary_row(
-            rows,
+        rows = _upsert_summary_row_locked(
+            output_root,
             _summary_row(model=model, summary=summary, output_dir=output_dir, metric_ids=metric_ids),
         )
-        _write_summary(output_root, rows)
         progress("eval matrix model done", slug=slug, output_dir=output_dir)
 
-    _write_summary(output_root, rows)
+    rows = _load_summary_locked(output_root)
     print(json.dumps({"output_dir": str(output_root), "models": len(rows)}, sort_keys=True))
 
 
