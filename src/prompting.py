@@ -20,6 +20,7 @@ _TOKENIZER_CACHE: dict[tuple[str, str, bool], Any] = {}
 @dataclass(frozen=True, slots=True)
 class RenderedPrompt:
     text: str
+    messages: list[dict[str, str]]
     template_id: str
     template_group: str
     template_hash: str
@@ -90,9 +91,26 @@ def _template_values(template_cfg: Mapping[str, Any], *, source: str, row_id: st
 
 
 def _template_group_for_model(model_cfg: Mapping[str, Any]) -> str:
-    if bool(model_cfg.get("use_hf_chat_template", False)):
+    if bool(model_cfg.get("use_hf_chat_template", False)) or bool(
+        model_cfg.get("use_chat_messages", False)
+    ):
         return "instruct_templates"
     return "base_templates"
+
+
+def _template_by_id(
+    templates: list[Any],
+    *,
+    group_name: str,
+    template_id: str,
+) -> tuple[Mapping[str, Any], str]:
+    for idx, template in enumerate(templates):
+        if not isinstance(template, Mapping):
+            raise PromptError(f"invalid student template at {group_name}[{idx}]")
+        current_id = str(template.get("id", f"{group_name}_{idx:03d}"))
+        if current_id == template_id:
+            return template, current_id
+    raise PromptError(f"{group_name} missing template id={template_id!r}")
 
 
 def _apply_chat_template(
@@ -162,27 +180,36 @@ def render_student_prompt(
     source: str,
     row_id: str,
     subset_idx: int,
+    fixed_template_id: str | None = None,
 ) -> RenderedPrompt:
     group_name = _template_group_for_model(model_cfg)
     templates = template_cfg.get(group_name, [])
     if not isinstance(templates, list) or not templates:
         raise PromptError(f"student templates missing non-empty {group_name}")
 
-    seed = int(prompt_cfg.get("template_seed", 42))
-    selection = prompt_cfg.get("student_selection", {})
-    deterministic = bool(
-        isinstance(selection, Mapping) and selection.get("deterministic_by_sample_id", True)
-    )
-    sample_key = row_id if deterministic else f"{row_id}:{subset_idx}"
-    template_idx = stable_template_index(sample_key, len(templates), seed)
-    template = templates[template_idx]
-    if not isinstance(template, Mapping):
-        raise PromptError(f"invalid student template at {group_name}[{template_idx}]")
+    if fixed_template_id:
+        template, template_id = _template_by_id(
+            templates,
+            group_name=group_name,
+            template_id=fixed_template_id,
+        )
+        seed = int(prompt_cfg.get("template_seed", 42))
+    else:
+        seed = int(prompt_cfg.get("template_seed", 42))
+        selection = prompt_cfg.get("student_selection", {})
+        deterministic = bool(
+            isinstance(selection, Mapping) and selection.get("deterministic_by_sample_id", True)
+        )
+        sample_key = row_id if deterministic else f"{row_id}:{subset_idx}"
+        template_idx = stable_template_index(sample_key, len(templates), seed)
+        template = templates[template_idx]
+        if not isinstance(template, Mapping):
+            raise PromptError(f"invalid student template at {group_name}[{template_idx}]")
+        template_id = str(template.get("id", f"{group_name}_{template_idx:03d}"))
 
     text = str(template.get("text", ""))
     system_text = str(template.get("system", ""))
     user_text = str(template.get("user", text))
-    template_id = str(template.get("id", f"{group_name}_{template_idx:03d}"))
     values = _template_values(template_cfg, source=source, row_id=row_id, seed=seed)
     rendered_system = system_text.format(**values)
     rendered_user = user_text.format(**values)
@@ -191,10 +218,15 @@ def render_student_prompt(
         system_prompt=rendered_system,
         model_cfg=model_cfg,
     )
+    messages: list[dict[str, str]] = []
+    if rendered_system.strip():
+        messages.append({"role": "system", "content": rendered_system.strip()})
+    messages.append({"role": "user", "content": rendered_user})
     hash_source = f"system:{system_text}\nuser:{user_text}"
     template_hash = hashlib.sha256(hash_source.encode("utf-8")).hexdigest()
     return RenderedPrompt(
         text=final_prompt,
+        messages=messages,
         template_id=template_id,
         template_group=group_name,
         template_hash=template_hash,

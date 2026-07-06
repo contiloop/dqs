@@ -221,6 +221,27 @@ def _eval_inference_cfg(cfg: Mapping[str, Any]) -> dict[str, Any]:
     return inference
 
 
+def _fixed_eval_template_id(
+    *,
+    prompt_cfg: Mapping[str, Any],
+    model_cfg: Mapping[str, Any],
+) -> str | None:
+    eval_prompt_cfg = prompt_cfg.get("evaluation", {})
+    if not isinstance(eval_prompt_cfg, Mapping):
+        return None
+    if bool(eval_prompt_cfg.get("random_template", True)):
+        return None
+    if bool(model_cfg.get("use_hf_chat_template", False)) or bool(
+        model_cfg.get("use_chat_messages", False)
+    ):
+        template_id = eval_prompt_cfg.get("instruct_template_id")
+    else:
+        template_id = eval_prompt_cfg.get("base_template_id")
+    if not isinstance(template_id, str) or not template_id.strip():
+        return None
+    return template_id.strip()
+
+
 def _build_eval_requests(
     *,
     cfg: Mapping[str, Any],
@@ -238,6 +259,7 @@ def _build_eval_requests(
     if model_spec.get("lora_adapter_path"):
         model_cfg["lora_adapter_path"] = str(model_spec["lora_adapter_path"])
     inference_cfg = _eval_inference_cfg(cfg)
+    fixed_template_id = _fixed_eval_template_id(prompt_cfg=prompt_cfg, model_cfg=model_cfg)
     profile = str(_get(cfg, "eval.profile", "train"))
 
     requests: list[dict[str, Any]] = []
@@ -249,6 +271,7 @@ def _build_eval_requests(
             source=str(row["source"]),
             row_id=str(row["id"]),
             subset_idx=0,
+            fixed_template_id=fixed_template_id,
         )
         requests.append(
             {
@@ -260,6 +283,7 @@ def _build_eval_requests(
                 "source": row["source"],
                 "metadata": row.get("metadata", {}),
                 "prompt": rendered.text,
+                "prompt_messages": rendered.messages,
                 "prompt_template_id": rendered.template_id,
                 "prompt_template_group": rendered.template_group,
                 "prompt_template_hash": rendered.template_hash,
@@ -343,6 +367,7 @@ def _validated_existing_outputs_or_none(
 
 def _run_generation(
     *,
+    cfg: Mapping[str, Any],
     requests: list[dict[str, Any]],
     request_path: Path,
     output_path: Path,
@@ -367,15 +392,23 @@ def _run_generation(
                 "mt": "",
                 "finish_reason": None,
                 "generated_token_count": 0,
+                "usage": {},
                 "error": None,
             }
             for request in requests
         ]
         write_jsonl(output_path, rows)
         return rows
+    backend = str(_get(cfg, "inference.backend", "vllm")).strip().lower()
+    if backend in {"openrouter", "openai_chat", "openai-compatible", "openai_compatible"}:
+        runner = "openrouter_inference.py"
+    elif backend == "vllm":
+        runner = "vllm_inference.py"
+    else:
+        raise SystemExit(f"unsupported inference.backend={backend!r}")
     cmd = [
         sys.executable,
-        str(Path(__file__).with_name("vllm_inference.py")),
+        str(Path(__file__).with_name(runner)),
         "--input",
         str(request_path),
         "--output",
@@ -423,6 +456,7 @@ def _materialize_eval_translations(
                 "eval_profile": request.get("eval_profile"),
                 "order_idx": request.get("order_idx"),
                 "prompt": request["prompt"],
+                "prompt_messages": request.get("prompt_messages", []),
                 "prompt_template_id": request["prompt_template_id"],
                 "prompt_template_group": request["prompt_template_group"],
                 "prompt_template_hash": request["prompt_template_hash"],
@@ -430,9 +464,28 @@ def _materialize_eval_translations(
                 "model": request.get("model", {}),
                 "inference": request.get("inference", {}),
                 "decoding": request.get("decoding", {}),
+                "usage": response.get("usage", {}),
+                "provider": response.get("provider"),
+                "raw_model": response.get("model"),
             }
         )
     return out_rows
+
+
+def _usage_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+    keys = ("prompt_tokens", "completion_tokens", "total_tokens")
+    totals = {key: 0 for key in keys}
+    observed = False
+    for row in rows:
+        usage = row.get("usage", {})
+        if not isinstance(usage, Mapping):
+            continue
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, (int, float)):
+                totals[key] += int(value)
+                observed = True
+    return totals if observed else {}
 
 
 def _filter_eval_rows(cfg: Mapping[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -674,12 +727,16 @@ def _build_eval_records(
                     "template_group": row.get("prompt_template_group"),
                     "template_hash": row.get("prompt_template_hash"),
                     "chat_template_applied": row.get("chat_template_applied"),
+                    "messages": row.get("prompt_messages", []),
                 },
                 "generation": {
                     "status": row.get("status"),
                     "finish_reason": row.get("finish_reason"),
                     "generated_token_count": row.get("generated_token_count"),
                     "error": row.get("error"),
+                    "usage": row.get("usage", {}),
+                    "provider": row.get("provider"),
+                    "raw_model": row.get("raw_model"),
                 },
                 "filter": {
                     "enabled": row.get("degeneration_filter_enabled"),
@@ -738,6 +795,7 @@ def main() -> None:
     write_jsonl(request_path, requests)
     with progress_context("eval generate", requests=len(requests)):
         responses = _run_generation(
+            cfg=cfg,
             requests=requests,
             request_path=request_path,
             output_path=output_path,
@@ -782,6 +840,7 @@ def main() -> None:
         "filter_fail_rows": fail_rows,
         "filter_fail_ratio": fail_rows / max(len(filtered), 1),
         "filter_label_counts": dict(sorted(label_counts.items())),
+        "usage": _usage_summary(translations),
         "metrics": metric_summary,
         "dry_run": bool(args.dry_run),
     }

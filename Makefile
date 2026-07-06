@@ -51,6 +51,16 @@ EVAL_FORCE ?= 0
 EVAL_EVERY_N_SUBSETS ?= 1
 EVAL_ON_FINAL_SUBSET ?= 1
 EVAL_OVERRIDES ?=
+EVAL_MATRIX_CONFIG ?= configs/eval_matrix/openrouter.yaml
+EVAL_MATRIX_OUTPUT_DIR ?=
+EVAL_MATRIX_PROFILE ?=
+EVAL_MATRIX_MODELS ?=
+EVAL_MATRIX_DATA_PATH ?=
+EVAL_MATRIX_LIMIT ?=
+EVAL_MATRIX_METRICS ?=
+EVAL_MATRIX_MAX_NEW_TOKENS ?=
+EVAL_MATRIX_DRY_RUN ?= 0
+EVAL_MATRIX_FORCE ?= 0
 EVAL_CHECKPOINT_PROFILE ?= final
 EVAL_CHECKPOINT_DIR ?=
 EVAL_CHECKPOINT_OUTPUT_DIR ?=
@@ -141,7 +151,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-checkpoints upload-run compact-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -455,6 +465,24 @@ eval:
 		$(foreach override,$(EVAL_OVERRIDES),--override "$(override)") \
 		$(if $(filter 1,$(EVAL_DRY_RUN)),--dry-run,) \
 		$(if $(filter 1,$(EVAL_FORCE)),--force,)
+
+eval-matrix:
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src COMET_PYTHON="$(COMET_PYTHON)" METRICX_PYTHON="$(METRICX_PYTHON)" METRICX_REPO_DIR="$(METRICX_REPO_DIR)" "$$py" src/eval_matrix.py \
+		--matrix-config "$(EVAL_MATRIX_CONFIG)" \
+		--eval-config "$(EVAL_CONFIG)" \
+		$(if $(EVAL_MATRIX_OUTPUT_DIR),--output-dir "$(EVAL_MATRIX_OUTPUT_DIR)",) \
+		$(if $(EVAL_MATRIX_PROFILE),--profile "$(EVAL_MATRIX_PROFILE)",) \
+		$(if $(EVAL_MATRIX_MODELS),--models "$(EVAL_MATRIX_MODELS)",) \
+		$(if $(EVAL_MATRIX_DATA_PATH),--data-path "$(EVAL_MATRIX_DATA_PATH)",) \
+		$(if $(EVAL_MATRIX_LIMIT),--limit "$(EVAL_MATRIX_LIMIT)",) \
+		$(if $(EVAL_MATRIX_METRICS),--metrics "$(EVAL_MATRIX_METRICS)",) \
+		$(if $(EVAL_MATRIX_MAX_NEW_TOKENS),--max-new-tokens "$(EVAL_MATRIX_MAX_NEW_TOKENS)",) \
+		$(if $(filter 1,$(EVAL_MATRIX_DRY_RUN)),--dry-run,) \
+		$(if $(filter 1,$(EVAL_MATRIX_FORCE)),--force,)
 
 eval-checkpoints:
 	@py="$(REAL_ENV_PY)"; \

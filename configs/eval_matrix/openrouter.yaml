@@ -1,0 +1,139 @@
+suite:
+  name: openrouter_api
+  eval_config: configs/config.yaml
+  eval_profile: final
+  output_dir: outputs/results/openrouter_api
+  metrics: bleu,chrf
+  max_new_tokens: 1024
+  temperature: 0.0
+  top_p: 1.0
+
+openrouter:
+  api_key_env: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1/chat/completions
+  app_name: DQS Eval
+  concurrency: 4
+  timeout_s: 120
+  max_retries: 5
+  retry_sleep_s: 2.0
+
+models:
+  - slug: gemma4_26b_a4b_free
+    model: google/gemma-4-26b-a4b-it:free
+    family: gemma4
+    size: 26b_a4b
+    variant: instruct_free
+    prompt_price_per_mtok_usd: 0.0
+    completion_price_per_mtok_usd: 0.0
+
+  - slug: gemma4_31b_free
+    model: google/gemma-4-31b-it:free
+    family: gemma4
+    size: 31b
+    variant: instruct_free
+    prompt_price_per_mtok_usd: 0.0
+    completion_price_per_mtok_usd: 0.0
+
+  - slug: qwen35_9b
+    model: qwen/qwen3.5-9b
+    family: qwen3.5
+    size: 9b
+    variant: api
+    prompt_price_per_mtok_usd: 0.10
+    completion_price_per_mtok_usd: 0.15
+
+  - slug: gemma4_26b_a4b
+    model: google/gemma-4-26b-a4b-it
+    family: gemma4
+    size: 26b_a4b
+    variant: instruct
+    prompt_price_per_mtok_usd: 0.06
+    completion_price_per_mtok_usd: 0.33
+
+  - slug: gemma4_31b
+    model: google/gemma-4-31b-it
+    family: gemma4
+    size: 31b
+    variant: instruct
+    prompt_price_per_mtok_usd: 0.12
+    completion_price_per_mtok_usd: 0.35
+
+  - slug: qwen35_35b_a3b
+    model: qwen/qwen3.5-35b-a3b
+    family: qwen3.5
+    size: 35b_a3b
+    variant: api
+    prompt_price_per_mtok_usd: 0.14
+    completion_price_per_mtok_usd: 1.00
+
+  - slug: qwen35_27b
+    model: qwen/qwen3.5-27b
+    family: qwen3.5
+    size: 27b
+    variant: api
+    prompt_price_per_mtok_usd: 0.195
+    completion_price_per_mtok_usd: 1.56
+
+  - slug: qwen35_122b_a10b
+    model: qwen/qwen3.5-122b-a10b
+    family: qwen3.5
+    size: 122b_a10b
+    variant: api
+    prompt_price_per_mtok_usd: 0.26
+    completion_price_per_mtok_usd: 2.08
+
+  - slug: qwen35_397b_a17b
+    model: qwen/qwen3.5-397b-a17b
+    family: qwen3.5
+    size: 397b_a17b
+    variant: api
+    prompt_price_per_mtok_usd: 0.385
+    completion_price_per_mtok_usd: 2.45
+
+  - slug: gpt54_mini
+    model: openai/gpt-5.4-mini
+    family: openai
+    size: mini
+    variant: api
+    prompt_price_per_mtok_usd: 0.75
+    completion_price_per_mtok_usd: 4.50
+
+  - slug: gemini35_flash
+    model: google/gemini-3.5-flash
+    family: gemini
+    size: flash
+    variant: api
+    prompt_price_per_mtok_usd: 1.50
+    completion_price_per_mtok_usd: 9.00
+
+  - slug: claude_sonnet5
+    model: anthropic/claude-sonnet-5
+    family: claude
+    size: sonnet5
+    variant: api
+    prompt_price_per_mtok_usd: 2.00
+    completion_price_per_mtok_usd: 10.00
+
+  - slug: gemini31_pro_preview
+    model: google/gemini-3.1-pro-preview
+    family: gemini
+    size: pro
+    variant: api_preview
+    prompt_price_per_mtok_usd: 2.00
+    completion_price_per_mtok_usd: 12.00
+
+  - slug: claude_opus48
+    model: anthropic/claude-opus-4.8
+    family: claude
+    size: opus4.8
+    variant: api
+    prompt_price_per_mtok_usd: 5.00
+    completion_price_per_mtok_usd: 25.00
+
+  - slug: gpt55
+    model: openai/gpt-5.5
+    family: openai
+    size: flagship
+    variant: api
+    prompt_price_per_mtok_usd: 5.00
+    completion_price_per_mtok_usd: 30.00
