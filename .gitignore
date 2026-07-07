@@ -4,6 +4,7 @@
 .venv/
 artifacts/
 outputs/
+mqm/
 data/prepared/
 ref/
 .env

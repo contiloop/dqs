@@ -191,6 +191,7 @@ def subset_summary_payload(summary: Mapping[str, Any]) -> dict[str, Any]:
         "subset/index": summary.get("subset_idx"),
         "subset/filtered_rows": summary.get("student_filter_fail_rows"),
         "subset/filter_blocked_selection_rows": summary.get("student_filter_blocked_selection_rows"),
+        "subset/qe_selection_order": summary.get("qe_selection_order"),
         "subset/selected_for_teacher_rows": summary.get("selected_for_teacher_rows"),
         "subset/all_qe_score_mean": summary.get("all_qe_score_mean"),
         "subset/selected_qe_score_mean": summary.get("selected_qe_score_mean"),
