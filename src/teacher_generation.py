@@ -301,6 +301,13 @@ def _teacher_bucket_queues(
     return queues
 
 
+def _candidate_qe_sort_score(row: Mapping[str, Any]) -> float:
+    value = row.get("qe_score")
+    if value is None:
+        return 0.0
+    return float(value)
+
+
 def _choose_teacher_bucket(
     *,
     bucket_queues: list[deque[dict[str, Any]]],
@@ -344,7 +351,7 @@ def _choose_teacher_bucket(
     return min(
         fallback,
         key=lambda idx: (
-            float(bucket_queues[idx][0].get("qe_score", 0.0)),
+            _candidate_qe_sort_score(bucket_queues[idx][0]),
             str(bucket_queues[idx][0].get("id", "")),
             idx,
         ),
