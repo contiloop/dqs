@@ -291,10 +291,19 @@ def _ensure_no_visual_trainable_parameters(model: Any) -> None:
         preview = ", ".join(visual_trainable[:8])
         suffix = "" if len(visual_trainable) <= 8 else f", ... (+{len(visual_trainable) - 8} more)"
         raise SystemExit(
-            "LoRA produced trainable visual parameters while training.train_vision_layers=false. "
-            "Use text-only training.lora.target_modules or set training.train_vision_layers=true. "
+            "The model has trainable visual parameters while training.train_vision_layers=false. "
+            "Freeze visual parameters or set training.train_vision_layers=true only for multimodal training. "
             f"Examples: {preview}{suffix}"
         )
+
+
+def _freeze_visual_parameters(model: Any) -> int:
+    frozen = 0
+    for name, parameter in model.named_parameters():
+        if _contains_visual_module_name(name):
+            parameter.requires_grad_(False)
+            frozen += 1
+    return frozen
 
 
 def _write_lora_target_audit(path: Path, model: Any, target_modules: Any) -> None:
@@ -318,6 +327,9 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
     if str(training_cfg.get("tuning_mode", "")).lower() != "lora":
         for parameter in model.parameters():
             parameter.requires_grad_(True)
+        if not bool(training_cfg.get("train_vision_layers", False)):
+            _freeze_visual_parameters(model)
+            _ensure_no_visual_trainable_parameters(model)
         return model
     lora_cfg = training_cfg.get("lora")
     if not isinstance(lora_cfg, Mapping):

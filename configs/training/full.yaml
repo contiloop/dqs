@@ -29,7 +29,7 @@ training:
   gradient_accumulation_steps: auto
   packing: false
   lora: null
-  train_vision_layers: true
+  train_vision_layers: false
   full_finetuning: true
   optimizer_resume_required: true
   scheduler_resume_required: true
