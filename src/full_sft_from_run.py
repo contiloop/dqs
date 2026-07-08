@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -50,6 +51,10 @@ def _source_sft_path(source_run_dir: Path, subset_idx: int) -> Path:
 
 def _target_sft_path(cfg: Mapping[str, Any], subset_idx: int) -> Path:
     return Path(str(_get(cfg, "paths.subset_dir"))) / f"subset_{subset_idx:03d}" / "sft_train.jsonl"
+
+
+def _combined_sft_path(cfg: Mapping[str, Any]) -> Path:
+    return Path(str(_get(cfg, "paths.subset_dir"))) / "combined" / "sft_train.jsonl"
 
 
 def _checkpoint_dir(cfg: Mapping[str, Any]) -> Path:
@@ -145,6 +150,30 @@ def _total_scheduler_steps(
     )
 
 
+def _gradient_accumulation_steps(cfg: Mapping[str, Any], *, world_size: int) -> int:
+    training_cfg = _get(cfg, "training", {})
+    raw = training_cfg.get("gradient_accumulation_steps", "auto") if isinstance(training_cfg, Mapping) else "auto"
+    if raw != "auto":
+        return max(1, int(raw))
+    effective = int(_get(cfg, "training.effective_batch_size", 128) or 128)
+    per_device = int(_get(cfg, "training.per_device_train_batch_size", 1) or 1)
+    denominator = max(1, per_device * max(1, world_size))
+    return max(1, math.ceil(effective / denominator))
+
+
+def _padded_row_count_for_stage_boundary(
+    *,
+    cfg: Mapping[str, Any],
+    row_count: int,
+    world_size: int,
+) -> tuple[int, int]:
+    update_steps = estimate_update_steps_for_rows(row_count, cfg, world_size=max(1, world_size))
+    per_device = int(_get(cfg, "training.per_device_train_batch_size", 1) or 1)
+    micro_batch_rows = max(1, per_device * max(1, world_size))
+    grad_accum = _gradient_accumulation_steps(cfg, world_size=max(1, world_size))
+    return update_steps * grad_accum * micro_batch_rows, update_steps
+
+
 def _is_completed_subset(cfg: Mapping[str, Any], subset_idx: int) -> bool:
     state = _read_json_if_exists(_stage_state_path(cfg, subset_idx))
     return bool(state and state.get("status") == "completed")
@@ -155,12 +184,110 @@ def _copy_dataset(source_path: Path, target_path: Path) -> None:
     shutil.copy2(source_path, target_path)
 
 
+def _write_jsonl(path: Path, rows: list[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=False) + "\n")
+
+
+def _build_combined_dataset(
+    *,
+    cfg: Mapping[str, Any],
+    source_run_dir: Path,
+    start_subset: int,
+    stage_end: int,
+    world_size: int,
+    preserve_stage_boundaries: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    subsets: list[dict[str, Any]] = []
+    total_original_rows = 0
+    total_padding_rows = 0
+    total_update_steps = 0
+
+    for subset_idx in range(start_subset, stage_end):
+        source_path = _source_sft_path(source_run_dir, subset_idx)
+        source_rows = read_jsonl(source_path)
+        if not source_rows:
+            raise SystemExit(f"empty source SFT dataset: {source_path}")
+
+        original_count = len(source_rows)
+        if preserve_stage_boundaries:
+            target_count, update_steps = _padded_row_count_for_stage_boundary(
+                cfg=cfg,
+                row_count=original_count,
+                world_size=world_size,
+            )
+        else:
+            target_count = original_count
+            update_steps = estimate_update_steps_for_rows(original_count, cfg, world_size=max(1, world_size))
+
+        if target_count < original_count:
+            raise SystemExit(
+                "internal full SFT padding error: "
+                f"target_count={target_count} < original_count={original_count} for subset_{subset_idx:03d}"
+            )
+
+        for row_idx, source_row in enumerate(source_rows):
+            row = dict(source_row)
+            row["_full_sft_source_subset_idx"] = subset_idx
+            row["_full_sft_source_row_idx"] = row_idx
+            row["_full_sft_padding"] = False
+            rows.append(row)
+
+        padding_count = target_count - original_count
+        for pad_idx in range(padding_count):
+            source_row_idx = pad_idx % original_count
+            row = dict(source_rows[source_row_idx])
+            row["_full_sft_source_subset_idx"] = subset_idx
+            row["_full_sft_source_row_idx"] = source_row_idx
+            row["_full_sft_padding"] = True
+            row["_full_sft_padding_idx"] = pad_idx
+            rows.append(row)
+
+        total_original_rows += original_count
+        total_padding_rows += padding_count
+        total_update_steps += update_steps
+        subsets.append(
+            {
+                "subset_idx": subset_idx,
+                "subset_name": f"subset_{subset_idx:03d}",
+                "source_sft_path": str(source_path),
+                "original_rows": original_count,
+                "combined_rows": target_count,
+                "padding_rows": padding_count,
+                "planned_update_steps": update_steps,
+            }
+        )
+
+    summary = {
+        "combined_rows": len(rows),
+        "original_rows": total_original_rows,
+        "padding_rows": total_padding_rows,
+        "planned_update_steps": total_update_steps,
+        "preserve_stage_boundaries": bool(preserve_stage_boundaries),
+        "subsets": subsets,
+    }
+    return rows, summary
+
+
+def _has_existing_training_artifacts(cfg: Mapping[str, Any]) -> list[str]:
+    checkpoint_dir = _checkpoint_dir(cfg)
+    if not checkpoint_dir.exists():
+        return []
+    paths: list[str] = []
+    for pattern in ["checkpoint-*", "final", "full_model", "adapter", "merged_16bit"]:
+        paths.extend(str(path) for path in sorted(checkpoint_dir.glob(pattern)) if path.exists())
+    return paths
+
+
 def _sft_command(
     *,
     args: argparse.Namespace,
     subset_idx: int,
     dataset_path: Path,
-    scheduler_total_steps: int,
+    scheduler_total_steps: int | None,
     overrides: list[str],
 ) -> list[str]:
     sft_script = Path(__file__).with_name("sft_train.py")
@@ -185,11 +312,16 @@ def _sft_command(
             str(subset_idx),
             "--dataset-path",
             str(dataset_path),
-            "--stage-scheduler-total-steps",
-            str(scheduler_total_steps),
-            "--force-save-checkpoint",
         ]
     )
+    if scheduler_total_steps is not None:
+        cmd.extend(
+            [
+                "--stage-scheduler-total-steps",
+                str(scheduler_total_steps),
+                "--force-save-checkpoint",
+            ]
+        )
     for override in overrides:
         cmd.extend(["--override", override])
     if args.dry_run:
@@ -206,7 +338,22 @@ def _subprocess_env() -> dict[str, str]:
 
 def _compose_overrides(args: argparse.Namespace) -> list[str]:
     overrides = ["training=full", "training.dataloader_shuffle=false"]
-    if args.final_only_artifacts:
+    if args.single_pass:
+        overrides.extend(
+            [
+                "training.resume_from_checkpoint=false",
+                "training.save_strategy=no",
+            ]
+        )
+        if args.final_only_artifacts:
+            overrides.extend(
+                [
+                    "training.save_final_model=true",
+                    "training.save_full_model=false",
+                    "training.save_total_limit=1",
+                ]
+            )
+    elif args.final_only_artifacts:
         overrides.extend(
             [
                 "training.save_final_model=false",
@@ -323,15 +470,113 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         end_subset_exclusive=stage_end,
         sft_nproc_per_node=args.sft_nproc_per_node,
         scheduler_total_steps=scheduler_total_steps,
+        single_pass=args.single_pass,
     )
 
     if args.plan_only:
+        if args.single_pass:
+            _, combined_summary = _build_combined_dataset(
+                cfg=cfg,
+                source_run_dir=source_run_dir,
+                start_subset=start_subset,
+                stage_end=stage_end,
+                world_size=max(1, int(args.sft_nproc_per_node or 1)),
+                preserve_stage_boundaries=bool(args.preserve_stage_boundaries),
+            )
+            summary.update(
+                {
+                    "single_pass": True,
+                    "preserve_stage_boundaries": bool(args.preserve_stage_boundaries),
+                    "combined_sft_path": str(_combined_sft_path(cfg)),
+                    "combined_dataset": combined_summary,
+                    "sft_scheduler_total_steps": combined_summary["planned_update_steps"],
+                }
+            )
+        else:
+            summary["single_pass"] = False
         summary["status"] = "planned"
         _write_json(summary_path, summary)
         progress("full-sft-from-run planned", run=_get(cfg, "run.id"), subsets=len(sft_rows))
         return summary
 
     env = _subprocess_env()
+    if args.single_pass:
+        existing_artifacts = _has_existing_training_artifacts(cfg)
+        if existing_artifacts and not args.force:
+            raise SystemExit(
+                "target full SFT run already has training artifacts; remove it or rerun with FULL_SFT_FORCE=1:\n"
+                + "\n".join(existing_artifacts)
+            )
+
+        combined_path = _combined_sft_path(cfg)
+        combined_rows, combined_summary = _build_combined_dataset(
+            cfg=cfg,
+            source_run_dir=source_run_dir,
+            start_subset=start_subset,
+            stage_end=stage_end,
+            world_size=max(1, int(args.sft_nproc_per_node or 1)),
+            preserve_stage_boundaries=bool(args.preserve_stage_boundaries),
+        )
+        if args.copy_datasets:
+            _write_jsonl(combined_path, combined_rows)
+            dataset_path = combined_path
+        else:
+            raise SystemExit("single-pass full SFT requires copying a combined dataset; remove FULL_SFT_COPY_DATASETS=0")
+
+        summary.update(
+            {
+                "single_pass": True,
+                "preserve_stage_boundaries": bool(args.preserve_stage_boundaries),
+                "combined_sft_path": str(combined_path),
+                "combined_dataset": combined_summary,
+                "sft_scheduler_total_steps": combined_summary["planned_update_steps"],
+            }
+        )
+        _write_json(summary_path, summary)
+
+        cmd = _sft_command(
+            args=args,
+            subset_idx=start_subset,
+            dataset_path=dataset_path,
+            scheduler_total_steps=None,
+            overrides=overrides,
+        )
+        summary["single_pass_sft_command"] = " ".join(cmd)
+        _write_json(summary_path, summary)
+        try:
+            with progress_context(
+                "full-sft single-pass",
+                rows=combined_summary["combined_rows"],
+                original_rows=combined_summary["original_rows"],
+                padding_rows=combined_summary["padding_rows"],
+                planned_update_steps=combined_summary["planned_update_steps"],
+            ):
+                subprocess.run(cmd, check=True, env=env)
+        except KeyboardInterrupt as exc:
+            summary["status"] = "interrupted"
+            summary["error"] = "interrupted by user"
+            _write_json(summary_path, summary)
+            raise SystemExit(130) from exc
+        except subprocess.CalledProcessError as exc:
+            summary["status"] = "failed"
+            summary["error"] = f"SFT exited with code {exc.returncode}"
+            _write_json(summary_path, summary)
+            raise SystemExit(exc.returncode) from exc
+
+        summary["status"] = "dry_run_completed" if args.dry_run else "completed"
+        summary["training_summary_path"] = str(_training_summary_path(cfg, start_subset))
+        summary["training_summary"] = _read_json_if_exists(_training_summary_path(cfg, start_subset))
+        _write_json(summary_path, summary)
+        progress(
+            "full-sft-from-run done",
+            run=_get(cfg, "run.id"),
+            mode="single-pass",
+            rows=combined_summary["combined_rows"],
+        )
+        return summary
+
+    summary["single_pass"] = False
+    _write_json(summary_path, summary)
     for subset_idx in range(start_subset, stage_end):
         source_path = _source_sft_path(source_run_dir, subset_idx)
         target_path = _target_sft_path(cfg, subset_idx)
@@ -427,6 +672,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--override", action="append", default=[])
     parser.add_argument("--no-copy-datasets", dest="copy_datasets", action="store_false")
     parser.set_defaults(copy_datasets=True)
+    parser.add_argument(
+        "--single-pass",
+        action="store_true",
+        help="Combine source sft_train.jsonl files and run Trainer once instead of resuming between subsets.",
+    )
+    parser.add_argument(
+        "--preserve-stage-boundaries",
+        action="store_true",
+        help="Pad each subset to its planned update-step boundary before single-pass training.",
+    )
     parser.add_argument(
         "--final-only-artifacts",
         action="store_true",

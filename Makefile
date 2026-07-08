@@ -94,6 +94,8 @@ FULL_SFT_OVERRIDES ?=
 FULL_SFT_COPY_DATASETS ?= 1
 FULL_SFT_FINAL_ONLY ?= 1
 FULL_SFT_DELETE_CHECKPOINTS_ON_COMPLETE ?= 0
+FULL_SFT_SINGLE_PASS ?= 1
+FULL_SFT_PRESERVE_STAGE_BOUNDARIES ?= 1
 FULL_SFT_DRY_RUN ?= 0
 FULL_SFT_FORCE ?= 0
 FULL_SFT_PLAN_ONLY ?= 0
@@ -572,6 +574,8 @@ full-sft-from-run:
 		--sft-nproc-per-node "$(SFT_NPROC_PER_NODE)" \
 		$(foreach override,$(FULL_SFT_OVERRIDES),--override "$(override)") \
 		$(if $(filter 0,$(FULL_SFT_COPY_DATASETS)),--no-copy-datasets,) \
+		$(if $(filter 1,$(FULL_SFT_SINGLE_PASS)),--single-pass,) \
+		$(if $(filter 1,$(FULL_SFT_PRESERVE_STAGE_BOUNDARIES)),--preserve-stage-boundaries,) \
 		$(if $(filter 1,$(FULL_SFT_FINAL_ONLY)),--final-only-artifacts,) \
 		$(if $(filter 1,$(FULL_SFT_DELETE_CHECKPOINTS_ON_COMPLETE)),--delete-checkpoints-on-complete,) \
 		$(if $(filter 1,$(FULL_SFT_DRY_RUN)),--dry-run,) \
