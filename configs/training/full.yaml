@@ -40,6 +40,7 @@ training:
   save_merged_model: false
   merge_smoke_test_required: false
   merge_smoke_test_mode: config_and_tokenizer
+  save_final_model: true
   save_full_model: true
   normalize_full_weight_checkpoint_keys: true
   assert_full_weight_checkpoint_keys: true

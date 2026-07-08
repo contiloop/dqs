@@ -209,6 +209,7 @@ def _compose_overrides(args: argparse.Namespace) -> list[str]:
     if args.final_only_artifacts:
         overrides.extend(
             [
+                "training.save_final_model=false",
                 "training.save_full_model=false",
                 "training.save_total_limit=1",
             ]
@@ -216,6 +217,19 @@ def _compose_overrides(args: argparse.Namespace) -> list[str]:
     overrides.extend(args.override)
     if args.run_id:
         overrides.append(f"run.id={args.run_id}")
+    return overrides
+
+
+def _subset_overrides(
+    *,
+    base_overrides: list[str],
+    args: argparse.Namespace,
+    subset_idx: int,
+    stage_end: int,
+) -> list[str]:
+    overrides = list(base_overrides)
+    if args.final_only_artifacts and subset_idx == stage_end - 1:
+        overrides.append("training.save_final_model=true")
     return overrides
 
 
@@ -327,6 +341,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "subset_name": f"subset_{subset_idx:03d}",
             "source_sft_path": str(source_path),
             "target_sft_path": str(target_path) if args.copy_datasets else None,
+            "save_final_model": bool(not args.final_only_artifacts or subset_idx == stage_end - 1),
             "sft_rows": sft_rows[subset_idx],
         }
 
@@ -347,7 +362,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             subset_idx=subset_idx,
             dataset_path=dataset_path,
             scheduler_total_steps=scheduler_total_steps,
-            overrides=overrides,
+            overrides=_subset_overrides(
+                base_overrides=overrides,
+                args=args,
+                subset_idx=subset_idx,
+                stage_end=stage_end,
+            ),
         )
         subset_record["sft_command"] = " ".join(cmd)
         try:

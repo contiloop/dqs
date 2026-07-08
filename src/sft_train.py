@@ -740,12 +740,13 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     artifacts: dict[str, Any] = {}
     smoke_tests: list[dict[str, Any]] = []
     trust_remote_code = bool(_get(cfg, "model.trust_remote_code", False))
-    final_dir = output_dir / "final"
-    final_dir.mkdir(parents=True, exist_ok=True)
-    with quiet_third_party_output():
-        model.save_pretrained(str(final_dir))
-        tokenizer.save_pretrained(str(final_dir))
-    artifacts["final_model_dir"] = str(final_dir)
+    if bool(training_cfg.get("save_final_model", True)):
+        final_dir = output_dir / "final"
+        final_dir.mkdir(parents=True, exist_ok=True)
+        with quiet_third_party_output():
+            model.save_pretrained(str(final_dir))
+            tokenizer.save_pretrained(str(final_dir))
+        artifacts["final_model_dir"] = str(final_dir)
 
     if tuning_mode == "lora":
         adapter_dir = output_dir / "adapter"
