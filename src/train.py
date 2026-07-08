@@ -1257,6 +1257,55 @@ def _run_qe_selection(
     return selected
 
 
+def _run_raw_random_selection(
+    *,
+    cfg: Mapping[str, Any],
+    input_rows: list[dict[str, Any]],
+    subset_idx: int,
+) -> list[dict[str, Any]]:
+    subset_dir = _subset_root(cfg, subset_idx)
+    runtime_dir = subset_dir / "runtime_io"
+    write_jsonl(runtime_dir / "infer-student.input.jsonl", [])
+    write_jsonl(runtime_dir / "infer-student.output.jsonl", [])
+    write_jsonl(subset_dir / "student_translations.jsonl", [])
+    write_jsonl(subset_dir / "student_filtered.jsonl", [])
+    write_jsonl(runtime_dir / "qe-selection.input.jsonl", [])
+    write_jsonl(runtime_dir / "qe-selection.output.jsonl", [])
+    write_jsonl(subset_dir / "qe_scores.jsonl", [])
+    write_jsonl(subset_dir / "filter_blocked_selection.jsonl", [])
+    write_jsonl(subset_dir / "student_records.jsonl", [])
+    (subset_dir / "student_filter_summary.json").write_text(
+        json.dumps(
+            {
+                "student_rows": 0,
+                "filter_input_rows": 0,
+                "filter_pass_rows": 0,
+                "filter_fail_rows": 0,
+                "filter_fail_ratio": 0.0,
+                "degeneration_filter_enabled": False,
+                "basic_validity_only": False,
+                "filter_label_counts": {},
+                "filter_blocked_selection_rows": 0,
+                "filter_blocked_selection_label_counts": {},
+                "raw_random_baseline": True,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+        ) + "\n",
+        encoding="utf-8",
+    )
+    selected = _select_raw_random_for_teacher(
+        cfg=cfg,
+        subset_idx=subset_idx,
+        input_rows=input_rows,
+    )
+    write_jsonl(subset_dir / "selected_for_teacher.jsonl", selected)
+    if input_rows and not selected:
+        raise SystemExit("raw random teacher selection produced zero candidates")
+    return selected
+
+
 def _student_filter_summary(
     *,
     student_rows: list[dict[str, Any]],
@@ -1315,6 +1364,34 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
     return data if isinstance(data, dict) else {}
+
+
+def _raw_random_baseline_enabled(cfg: Mapping[str, Any]) -> bool:
+    return _qe_selection_order(cfg) == "random"
+
+
+def _raw_random_selection_artifact_error(
+    *,
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+    input_rows: list[dict[str, Any]],
+    selected_rows: list[dict[str, Any]],
+) -> str | None:
+    expected_rows = _select_raw_random_for_teacher(
+        cfg=cfg,
+        subset_idx=subset_idx,
+        input_rows=input_rows,
+    )
+    expected_ids = [str(row.get("id", "")) for row in expected_rows]
+    selected_ids = [str(row.get("id", "")) for row in selected_rows]
+    if selected_ids != expected_ids:
+        return "raw random selected_for_teacher ids do not match current seed/subset/config"
+    for row in selected_rows:
+        if row.get("selection_rule") != "random_raw_length_bucket_candidate_pool":
+            return "raw random selected_for_teacher has an unexpected selection_rule"
+    if input_rows and not selected_rows:
+        return "raw random selected_for_teacher is empty despite non-empty input"
+    return None
 
 
 def _filter_student_rows(
@@ -1575,12 +1652,7 @@ def _select_for_teacher(
     if not scored_rows:
         return []
 
-    target = int(_get(cfg, "data.teacher_target_per_subset", 0) or 0)
-    if target <= 0:
-        ratio = float(_get(cfg, "data.selection_ratio", 0.01) or 0.01)
-        target = max(1, int(len(filter_rows) * ratio + 0.999999))
-    multiplier = float(_get(cfg, "teacher.candidate_multiplier", 1.0) or 1.0)
-    candidate_count = max(target, int(target * max(1.0, multiplier) + 0.999999))
+    candidate_count = _teacher_candidate_count(cfg, pool_size=len(filter_rows))
     qe_order = _qe_selection_order(cfg)
     scored_rows.sort(
         key=lambda row: _teacher_candidate_sort_key(
@@ -1603,6 +1675,55 @@ def _select_for_teacher(
         out["selection_rule"] = selection_rule
         selected.append(out)
     return selected
+
+
+def _select_raw_random_for_teacher(
+    *,
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+    input_rows: list[dict[str, Any]],
+    selection_rule: str = "random_raw_length_bucket_candidate_pool",
+) -> list[dict[str, Any]]:
+    if not input_rows:
+        return []
+    candidate_count = _teacher_candidate_count(cfg, pool_size=len(input_rows))
+    candidate_rows = [dict(row) for row in input_rows]
+    candidate_rows.sort(
+        key=lambda row: _teacher_candidate_sort_key(
+            row,
+            "random",
+            cfg=cfg,
+            subset_idx=subset_idx,
+        )
+    )
+    ranked_candidates = _rank_teacher_candidates_by_length_bucket(
+        cfg=cfg,
+        subset_idx=subset_idx,
+        scored_rows=candidate_rows,
+        candidate_count=candidate_count,
+    )
+    selected: list[dict[str, Any]] = []
+    for rank, row in enumerate(ranked_candidates, start=1):
+        out = dict(row)
+        out.setdefault("student_translation", "")
+        out.setdefault("student_status", "skipped_raw_random")
+        out.setdefault("student_error", None)
+        out["qe_score"] = None
+        out["qe_backend"] = None
+        out["qe_model"] = None
+        out["selection_rank"] = rank
+        out["selection_rule"] = selection_rule
+        selected.append(out)
+    return selected
+
+
+def _teacher_candidate_count(cfg: Mapping[str, Any], *, pool_size: int) -> int:
+    target = int(_get(cfg, "data.teacher_target_per_subset", 0) or 0)
+    if target <= 0:
+        ratio = float(_get(cfg, "data.selection_ratio", 0.01) or 0.01)
+        target = max(1, int(pool_size * ratio + 0.999999))
+    multiplier = float(_get(cfg, "teacher.candidate_multiplier", 1.0) or 1.0)
+    return max(target, int(target * max(1.0, multiplier) + 0.999999))
 
 
 def _source_token_length(row: Mapping[str, Any]) -> int:
@@ -1904,92 +2025,104 @@ def main() -> None:
             ),
         )
 
-    if "student-infer" in skipped:
-        valid = False
-        reason = "unknown"
-        normalized: list[dict[str, Any]] = []
-        try:
-            requests = _require_jsonl(request_path, "infer-student.input.jsonl")
-            request_error = _student_request_model_error(
-                cfg=cfg,
-                subset_idx=subset_idx,
-                requests=requests,
-            )
-            if request_error is not None:
-                raise ValueError(request_error)
-            responses = _require_jsonl(response_path, "infer-student.output.jsonl")
-            valid, reason, normalized = _validate_vllm_outputs(
-                requests=requests,
-                responses=responses,
-                allow_dry_run=args.dry_run,
-            )
-        except (SystemExit, ValueError, json.JSONDecodeError) as exc:
-            reason = str(exc)
-        if valid:
-            responses = normalized
-        else:
-            print(
-                f"[resume] invalid student-infer artifacts; rerunning student-infer: {reason}",
-                file=sys.stderr,
-            )
-            skipped = _rewind_skipped_phases(skipped, "student-infer")
-    if "student-infer" not in skipped:
-        def _student_infer_phase() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-            built_requests = _build_inference_requests(
-                cfg=cfg,
-                rows=input_rows,
-                subset_idx=subset_idx,
-                force=args.force,
-            )
-            if args.dry_run:
-                built_responses = _write_dry_run_outputs(built_requests, response_path, force=args.force)
+    raw_random_baseline = _raw_random_baseline_enabled(cfg)
+    requests: list[dict[str, Any]] = []
+    responses: list[dict[str, Any]] = []
+    student_rows: list[dict[str, Any]] = []
+    if raw_random_baseline:
+        progress(
+            "raw random baseline",
+            subset=f"subset_{subset_idx:03d}",
+            skip_student_infer=True,
+            skip_qe_scoring=True,
+        )
+    else:
+        if "student-infer" in skipped:
+            valid = False
+            reason = "unknown"
+            normalized: list[dict[str, Any]] = []
+            try:
+                requests = _require_jsonl(request_path, "infer-student.input.jsonl")
+                request_error = _student_request_model_error(
+                    cfg=cfg,
+                    subset_idx=subset_idx,
+                    requests=requests,
+                )
+                if request_error is not None:
+                    raise ValueError(request_error)
+                responses = _require_jsonl(response_path, "infer-student.output.jsonl")
+                valid, reason, normalized = _validate_vllm_outputs(
+                    requests=requests,
+                    responses=responses,
+                    allow_dry_run=args.dry_run,
+                )
+            except (SystemExit, ValueError, json.JSONDecodeError) as exc:
+                reason = str(exc)
+            if valid:
+                responses = normalized
             else:
-                built_responses = _run_vllm(request_path, response_path, force=args.force)
-            return built_requests, built_responses
+                print(
+                    f"[resume] invalid student-infer artifacts; rerunning student-infer: {reason}",
+                    file=sys.stderr,
+                )
+                skipped = _rewind_skipped_phases(skipped, "student-infer")
+        if "student-infer" not in skipped:
+            def _student_infer_phase() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+                built_requests = _build_inference_requests(
+                    cfg=cfg,
+                    rows=input_rows,
+                    subset_idx=subset_idx,
+                    force=args.force,
+                )
+                if args.dry_run:
+                    built_responses = _write_dry_run_outputs(built_requests, response_path, force=args.force)
+                else:
+                    built_responses = _run_vllm(request_path, response_path, force=args.force)
+                return built_requests, built_responses
 
-        requests, responses = _run_tracked_phase(
-            cfg=cfg,
-            subset_dir=subset_dir,
-            subset_idx=subset_idx,
-            phase="student-infer",
-            func=_student_infer_phase,
-        )
-
-    if "student-filter" in skipped:
-        student_error = None
-        try:
-            student_rows = _require_jsonl(
-                subset_dir / "student_translations.jsonl",
-                "student_translations.jsonl",
-            )
-            student_error = _student_translation_artifact_error(
-                input_rows=input_rows,
-                requests=requests,
-                responses=responses,
-                student_rows=student_rows,
-            )
-        except (SystemExit, ValueError, json.JSONDecodeError) as exc:
-            student_error = str(exc)
-        if student_error is not None:
-            print(
-                f"[resume] invalid student-filter artifacts; rerunning student-filter: {student_error}",
-                file=sys.stderr,
-            )
-            skipped = _rewind_skipped_phases(skipped, "student-filter")
-    if "student-filter" not in skipped:
-        student_rows = _run_tracked_phase(
-            cfg=cfg,
-            subset_dir=subset_dir,
-            subset_idx=subset_idx,
-            phase="student-filter",
-            func=lambda: _materialize_student_translations(
+            requests, responses = _run_tracked_phase(
                 cfg=cfg,
-                input_rows=input_rows,
-                requests=requests,
-                responses=responses,
+                subset_dir=subset_dir,
                 subset_idx=subset_idx,
-            ),
-        )
+                phase="student-infer",
+                func=_student_infer_phase,
+            )
+
+        if "student-filter" in skipped:
+            student_error = None
+            try:
+                student_rows = _require_jsonl(
+                    subset_dir / "student_translations.jsonl",
+                    "student_translations.jsonl",
+                )
+                student_error = _student_translation_artifact_error(
+                    input_rows=input_rows,
+                    requests=requests,
+                    responses=responses,
+                    student_rows=student_rows,
+                )
+            except (SystemExit, ValueError, json.JSONDecodeError) as exc:
+                student_error = str(exc)
+            if student_error is not None:
+                print(
+                    f"[resume] invalid student-filter artifacts; rerunning student-filter: {student_error}",
+                    file=sys.stderr,
+                )
+                skipped = _rewind_skipped_phases(skipped, "student-filter")
+        if "student-filter" not in skipped:
+            student_rows = _run_tracked_phase(
+                cfg=cfg,
+                subset_dir=subset_dir,
+                subset_idx=subset_idx,
+                phase="student-filter",
+                func=lambda: _materialize_student_translations(
+                    cfg=cfg,
+                    input_rows=input_rows,
+                    requests=requests,
+                    responses=responses,
+                    subset_idx=subset_idx,
+                ),
+            )
 
     selected_rows: list[dict[str, Any]] = []
     teacher_summary = {}
@@ -2000,22 +2133,31 @@ def main() -> None:
         if "qe-select" in skipped:
             qe_error = None
             try:
-                filter_rows = _require_jsonl_file(subset_dir / "student_filtered.jsonl", "student_filtered.jsonl")
-                student_filter_summary = _require_json(
-                    subset_dir / "student_filter_summary.json",
-                    "student_filter_summary.json",
-                )
                 selected_rows = _require_jsonl_file(
                     subset_dir / "selected_for_teacher.jsonl",
                     "selected_for_teacher.jsonl",
                 )
-                qe_error = _qe_selection_artifact_error(
-                    subset_dir=subset_dir,
-                    student_rows=student_rows,
-                    filter_rows=filter_rows,
-                    student_filter_summary=student_filter_summary,
-                    selected_rows=selected_rows,
-                )
+                if raw_random_baseline:
+                    student_filter_summary = _read_json_if_exists(subset_dir / "student_filter_summary.json")
+                    qe_error = _raw_random_selection_artifact_error(
+                        cfg=cfg,
+                        subset_idx=subset_idx,
+                        input_rows=input_rows,
+                        selected_rows=selected_rows,
+                    )
+                else:
+                    filter_rows = _require_jsonl_file(subset_dir / "student_filtered.jsonl", "student_filtered.jsonl")
+                    student_filter_summary = _require_json(
+                        subset_dir / "student_filter_summary.json",
+                        "student_filter_summary.json",
+                    )
+                    qe_error = _qe_selection_artifact_error(
+                        subset_dir=subset_dir,
+                        student_rows=student_rows,
+                        filter_rows=filter_rows,
+                        student_filter_summary=student_filter_summary,
+                        selected_rows=selected_rows,
+                    )
             except (SystemExit, ValueError, json.JSONDecodeError) as exc:
                 qe_error = str(exc)
             if qe_error is not None:
@@ -2027,16 +2169,24 @@ def main() -> None:
                 student_filter_summary = {}
                 selected_rows = []
         if "qe-select" not in skipped:
+            if raw_random_baseline:
+                qe_select_func = lambda: _run_raw_random_selection(
+                    cfg=cfg,
+                    input_rows=input_rows,
+                    subset_idx=subset_idx,
+                )
+            else:
+                qe_select_func = lambda: _run_qe_selection(
+                    cfg=cfg,
+                    student_rows=student_rows,
+                    subset_idx=subset_idx,
+                )
             selected_rows = _run_tracked_phase(
                 cfg=cfg,
                 subset_dir=subset_dir,
                 subset_idx=subset_idx,
                 phase="qe-select",
-                func=lambda: _run_qe_selection(
-                    cfg=cfg,
-                    student_rows=student_rows,
-                    subset_idx=subset_idx,
-                ),
+                func=qe_select_func,
             )
             student_filter_summary = _read_json_if_exists(subset_dir / "student_filter_summary.json")
 
@@ -2113,6 +2263,7 @@ def main() -> None:
             {},
         ),
         "qe_selection_order": _qe_selection_order(cfg),
+        "raw_random_baseline": raw_random_baseline,
         "selected_for_teacher_rows": len(selected_rows),
         "all_qe_score_mean": _mean_qe_score_from_file(subset_dir / "qe_scores.jsonl"),
         "selected_qe_score_mean": _mean_qe_score(selected_rows),
