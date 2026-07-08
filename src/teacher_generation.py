@@ -1050,7 +1050,7 @@ def run_teacher_generation(
             )
             raise RuntimeError(
                 "teacher API window failed for every batch; "
-                f"aborting before SFT. start_batch={batch_cursor} "
+                f"aborting before SFT. start_batch={max(0, called_batches - len(results))} "
                 f"batches={len(results)} sample_error={sample_error[:1000]}"
             )
         if not refill_until_target:
