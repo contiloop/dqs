@@ -84,6 +84,19 @@ COMPACT_RUN_ID ?=
 COMPACT_RUN_DIR ?=
 COMPACT_DRY_RUN ?= 0
 COMPACT_OVERRIDES ?=
+FULL_SFT_CONFIG ?= configs/config.yaml
+FULL_SFT_SOURCE_RUN_DIR ?=
+FULL_SFT_RUN_ID ?=
+FULL_SFT_START_SUBSET ?=
+FULL_SFT_END_SUBSET ?=
+FULL_SFT_MAX_SUBSETS ?=
+FULL_SFT_OVERRIDES ?=
+FULL_SFT_COPY_DATASETS ?= 1
+FULL_SFT_FINAL_ONLY ?= 1
+FULL_SFT_DELETE_CHECKPOINTS_ON_COMPLETE ?= 0
+FULL_SFT_DRY_RUN ?= 0
+FULL_SFT_FORCE ?= 0
+FULL_SFT_PLAN_ONLY ?= 0
 SFT_CONFIG ?= configs/config.yaml
 SFT_SUBSET_IDX ?=
 SFT_DATASET_PATH ?=
@@ -151,7 +164,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run full-sft-from-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -539,6 +552,31 @@ compact-run:
 		$(if $(COMPACT_RUN_DIR),--run-dir "$(COMPACT_RUN_DIR)",) \
 		$(foreach override,$(COMPACT_OVERRIDES),--override "$(override)") \
 		$(if $(filter 1,$(COMPACT_DRY_RUN)),--dry-run,)
+
+full-sft-from-run:
+	@if [ -z "$(FULL_SFT_SOURCE_RUN_DIR)" ]; then \
+		echo "FULL_SFT_SOURCE_RUN_DIR is required, e.g. make full-sft-from-run FULL_SFT_SOURCE_RUN_DIR=artifacts/runs/qwen35_4b_it_lora_seed42 FULL_SFT_RUN_ID=qwen35_4b_it_full_seed42"; \
+		exit 1; \
+	fi
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/full_sft_from_run.py \
+		--config "$(FULL_SFT_CONFIG)" \
+		--source-run-dir "$(FULL_SFT_SOURCE_RUN_DIR)" \
+		$(if $(FULL_SFT_RUN_ID),--run-id "$(FULL_SFT_RUN_ID)",) \
+		$(if $(FULL_SFT_START_SUBSET),--subset-idx "$(FULL_SFT_START_SUBSET)",) \
+		$(if $(FULL_SFT_END_SUBSET),--stage-end-subset "$(FULL_SFT_END_SUBSET)",) \
+		$(if $(FULL_SFT_MAX_SUBSETS),--stage-max-subsets "$(FULL_SFT_MAX_SUBSETS)",) \
+		--sft-nproc-per-node "$(SFT_NPROC_PER_NODE)" \
+		$(foreach override,$(FULL_SFT_OVERRIDES),--override "$(override)") \
+		$(if $(filter 0,$(FULL_SFT_COPY_DATASETS)),--no-copy-datasets,) \
+		$(if $(filter 1,$(FULL_SFT_FINAL_ONLY)),--final-only-artifacts,) \
+		$(if $(filter 1,$(FULL_SFT_DELETE_CHECKPOINTS_ON_COMPLETE)),--delete-checkpoints-on-complete,) \
+		$(if $(filter 1,$(FULL_SFT_DRY_RUN)),--dry-run,) \
+		$(if $(filter 1,$(FULL_SFT_FORCE)),--force,) \
+		$(if $(filter 1,$(FULL_SFT_PLAN_ONLY)),--plan-only,)
 
 sft:
 	@py="$(REAL_ENV_PY)"; \
