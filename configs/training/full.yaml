@@ -20,6 +20,7 @@ training:
   save_total_limit: null
   logging_steps: 1
   dataloader_num_workers: 4
+  dataloader_shuffle: true
   resume_from_checkpoint: auto
   append_eos_token: true
   response_only_loss: true

@@ -920,7 +920,22 @@ def run_sft_training(
         scheduler_total_steps=stage_scheduler_total_steps,
     )
 
-    class DQSStageSchedulerTrainer(Trainer):
+    class DQSTrainer(Trainer):
+        def _get_train_sampler(self, train_dataset: Any = None) -> Any:
+            if bool(_get(cfg, "training.dataloader_shuffle", True)):
+                try:
+                    return super()._get_train_sampler(train_dataset)
+                except TypeError:
+                    return super()._get_train_sampler()
+
+            dataset = train_dataset if train_dataset is not None else self.train_dataset
+            if dataset is None:
+                return None
+            from torch.utils.data import SequentialSampler
+
+            return SequentialSampler(dataset)
+
+    class DQSStageSchedulerTrainer(DQSTrainer):
         def __init__(self, *trainer_args: Any, dqs_scheduler_total_steps: int | None = None, **trainer_kwargs: Any) -> None:
             self._dqs_scheduler_total_steps = dqs_scheduler_total_steps
             super().__init__(*trainer_args, **trainer_kwargs)
@@ -937,7 +952,7 @@ def run_sft_training(
         ignore_data_skip_override=True if stage_plan else None,
     )
     wandb_callbacks = _wandb_train_callbacks(cfg, subset_idx=subset_idx)
-    trainer = Trainer(
+    trainer = DQSTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,

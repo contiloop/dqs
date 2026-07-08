@@ -205,7 +205,7 @@ def _subprocess_env() -> dict[str, str]:
 
 
 def _compose_overrides(args: argparse.Namespace) -> list[str]:
-    overrides = ["training=full"]
+    overrides = ["training=full", "training.dataloader_shuffle=false"]
     if args.final_only_artifacts:
         overrides.extend(
             [
