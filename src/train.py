@@ -1211,15 +1211,17 @@ def _run_qe_selection(
         response for response in qe_responses
         if str(response.get("row_id", "")) in clean_row_ids
     ]
-    qe_order_prefix = "top_qe" if _qe_selection_order(cfg) == "high" else "bottom_qe"
+    qe_order_prefix = _qe_selection_rule_prefix(_qe_selection_order(cfg))
     selected = _select_for_teacher(
         cfg=cfg,
+        subset_idx=subset_idx,
         filter_rows=filter_rows,
         qe_responses=clean_qe_responses,
         selection_rule=f"{qe_order_prefix}_clean_student_length_bucket_candidate_pool",
     )
     shadow_selected = _select_for_teacher(
         cfg=cfg,
+        subset_idx=subset_idx,
         filter_rows=filter_rows,
         qe_responses=qe_responses,
         selection_rule=f"{qe_order_prefix}_qe_eligible_length_bucket_candidate_pool",
@@ -1550,6 +1552,7 @@ def _student_records(
 def _select_for_teacher(
     *,
     cfg: Mapping[str, Any],
+    subset_idx: int,
     filter_rows: list[dict[str, Any]],
     qe_responses: list[dict[str, Any]],
     selection_rule: str = "bottom_qe_clean_student_length_bucket_candidate_pool",
@@ -1579,10 +1582,18 @@ def _select_for_teacher(
     multiplier = float(_get(cfg, "teacher.candidate_multiplier", 1.0) or 1.0)
     candidate_count = max(target, int(target * max(1.0, multiplier) + 0.999999))
     qe_order = _qe_selection_order(cfg)
-    scored_rows.sort(key=lambda row: _qe_sort_key(row, qe_order))
+    scored_rows.sort(
+        key=lambda row: _teacher_candidate_sort_key(
+            row,
+            qe_order,
+            cfg=cfg,
+            subset_idx=subset_idx,
+        )
+    )
     selected: list[dict[str, Any]] = []
     ranked_candidates = _rank_teacher_candidates_by_length_bucket(
         cfg=cfg,
+        subset_idx=subset_idx,
         scored_rows=scored_rows,
         candidate_count=candidate_count,
     )
@@ -1643,16 +1654,61 @@ def _qe_selection_order(cfg: Mapping[str, Any]) -> str:
         return "low"
     if order in {"top", "highest", "high_qe", "top_qe"}:
         return "high"
-    if order not in {"low", "high"}:
-        raise SystemExit("data.qe_selection_order must be low or high")
+    if order in {"rand", "random_qe"}:
+        return "random"
+    if order not in {"low", "high", "random"}:
+        raise SystemExit("data.qe_selection_order must be low, high, or random")
     return order
 
 
-def _qe_sort_key(row: Mapping[str, Any], order: str) -> tuple[float, str]:
+def _qe_sort_key(
+    row: Mapping[str, Any],
+    order: str,
+    *,
+    cfg: Mapping[str, Any] | None = None,
+    subset_idx: int | None = None,
+) -> tuple[object, ...]:
+    if order == "random":
+        if cfg is None or subset_idx is None:
+            raise SystemExit("random qe_selection_order requires run.seed and subset_idx")
+        return _random_teacher_candidate_key(row, cfg=cfg, subset_idx=subset_idx)
     score = float(row["qe_score"])
     if order == "high":
         return (-score, str(row["id"]))
     return (score, str(row["id"]))
+
+
+def _qe_selection_rule_prefix(order: str) -> str:
+    if order == "high":
+        return "top_qe"
+    if order == "random":
+        return "random"
+    return "bottom_qe"
+
+
+def _random_teacher_candidate_key(
+    row: Mapping[str, Any],
+    *,
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+) -> tuple[str, str]:
+    seed = str(_get(cfg, "run.seed", 42))
+    row_id = str(row["id"])
+    payload = (
+        "dqs_teacher_selection_random_v1"
+        f"|seed={seed}|subset_idx={subset_idx}|row_id={row_id}"
+    )
+    return (hashlib.sha256(payload.encode("utf-8")).hexdigest(), row_id)
+
+
+def _teacher_candidate_sort_key(
+    row: Mapping[str, Any],
+    order: str,
+    *,
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+) -> tuple[object, ...]:
+    return _qe_sort_key(row, order, cfg=cfg, subset_idx=subset_idx)
 
 
 def _bucket_weights(cfg: Mapping[str, Any], bucket_count: int) -> list[float] | None:
@@ -1691,6 +1747,7 @@ def _quota_from_weights(total: int, weights: list[float]) -> list[int]:
 def _rank_teacher_candidates_by_length_bucket(
     *,
     cfg: Mapping[str, Any],
+    subset_idx: int,
     scored_rows: list[dict[str, Any]],
     candidate_count: int,
 ) -> list[dict[str, Any]]:
@@ -1708,7 +1765,14 @@ def _rank_teacher_candidates_by_length_bucket(
 
     qe_order = _qe_selection_order(cfg)
     for rows in bucket_rows:
-        rows.sort(key=lambda row: _qe_sort_key(row, qe_order))
+        rows.sort(
+            key=lambda row: _teacher_candidate_sort_key(
+                row,
+                qe_order,
+                cfg=cfg,
+                subset_idx=subset_idx,
+            )
+        )
 
     explicit_weights = _bucket_weights(cfg, len(buckets))
     quota_strategy = str(selection_cfg.get("quota_strategy", "proportional")).strip().lower()
@@ -1752,7 +1816,16 @@ def _rank_teacher_candidates_by_length_bucket(
             selected.append(_with_bucket_meta(row, buckets, bucket_idx))
             selected_ids.add(row_id)
 
-    selected.sort(key=lambda row: (int(row["length_bucket_idx"]),) + _qe_sort_key(row, qe_order))
+    selected.sort(
+        key=lambda row: (
+            int(row["length_bucket_idx"]),
+        ) + _teacher_candidate_sort_key(
+            row,
+            qe_order,
+            cfg=cfg,
+            subset_idx=subset_idx,
+        )
+    )
     return selected[:candidate_count]
 
 

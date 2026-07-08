@@ -32,7 +32,7 @@ data:
   subset_size: 100000
   selection_ratio: 0.01
   teacher_target_per_subset: 1000
-  qe_selection_order: low
+  qe_selection_order: low  # low, high, random
   length_bucket_selection:
     enabled: true
     quota_strategy: proportional
