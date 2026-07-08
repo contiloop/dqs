@@ -99,6 +99,9 @@ FULL_SFT_PRESERVE_STAGE_BOUNDARIES ?= 1
 FULL_SFT_DRY_RUN ?= 0
 FULL_SFT_FORCE ?= 0
 FULL_SFT_PLAN_ONLY ?= 0
+REPAIR_MODEL_DIR ?=
+REPAIR_BACKUP ?= 0
+REPAIR_DRY_RUN ?= 0
 SFT_CONFIG ?= configs/config.yaml
 SFT_SUBSET_IDX ?=
 SFT_DATASET_PATH ?=
@@ -166,7 +169,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run full-sft-from-run sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run full-sft-from-run repair-qwen35-checkpoint sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -581,6 +584,20 @@ full-sft-from-run:
 		$(if $(filter 1,$(FULL_SFT_DRY_RUN)),--dry-run,) \
 		$(if $(filter 1,$(FULL_SFT_FORCE)),--force,) \
 		$(if $(filter 1,$(FULL_SFT_PLAN_ONLY)),--plan-only,)
+
+repair-qwen35-checkpoint:
+	@if [ -z "$(REPAIR_MODEL_DIR)" ]; then \
+		echo "REPAIR_MODEL_DIR is required, e.g. make repair-qwen35-checkpoint REPAIR_MODEL_DIR=artifacts/runs/<run>/checkpoints/final"; \
+		exit 1; \
+	fi
+	@py="$(REAL_ENV_PY)"; \
+	if ! command -v "$$py" >/dev/null 2>&1 && [ ! -x "$$py" ]; then \
+		py=python3; \
+	fi; \
+	PYTHONPATH=src "$$py" src/qwen35_checkpoint_keys.py \
+		--model-dir "$(REPAIR_MODEL_DIR)" \
+		$(if $(filter 1,$(REPAIR_BACKUP)),--backup,) \
+		$(if $(filter 1,$(REPAIR_DRY_RUN)),--dry-run,)
 
 sft:
 	@py="$(REAL_ENV_PY)"; \

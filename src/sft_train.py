@@ -13,6 +13,10 @@ from typing import Any, Mapping, Sequence
 from config_loader import compose_config
 from io_utils import read_jsonl
 from progress import progress_context
+from qwen35_checkpoint_keys import (
+    assert_no_bad_qwen35_checkpoint_keys,
+    normalize_qwen35_checkpoint_keys,
+)
 from runtime_logging import configure_runtime_logging, quiet_third_party_output
 from text_tokenization import text_decode, text_token_ids, text_tokenizer
 from wandb_logging import configure_wandb_env, log_wandb_metrics
@@ -752,6 +756,19 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     artifacts: dict[str, Any] = {}
     smoke_tests: list[dict[str, Any]] = []
     trust_remote_code = bool(_get(cfg, "model.trust_remote_code", False))
+    normalize_full_keys = bool(training_cfg.get("normalize_full_weight_checkpoint_keys", True))
+    assert_full_keys = bool(training_cfg.get("assert_full_weight_checkpoint_keys", True))
+
+    def _repair_full_artifact(path: Path) -> dict[str, Any] | None:
+        if tuning_mode != "full":
+            return None
+        normalization = None
+        if normalize_full_keys:
+            normalization = normalize_qwen35_checkpoint_keys(path)
+        if assert_full_keys:
+            assert_no_bad_qwen35_checkpoint_keys(path)
+        return normalization
+
     if bool(training_cfg.get("save_final_model", True)):
         final_dir = output_dir / "final"
         final_dir.mkdir(parents=True, exist_ok=True)
@@ -759,6 +776,9 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
             model.save_pretrained(str(final_dir))
             tokenizer.save_pretrained(str(final_dir))
         artifacts["final_model_dir"] = str(final_dir)
+        normalization = _repair_full_artifact(final_dir)
+        if normalization is not None:
+            artifacts["final_model_key_normalization"] = normalization
 
     if tuning_mode == "lora":
         adapter_dir = output_dir / "adapter"
@@ -789,6 +809,9 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
             model.save_pretrained(str(full_dir), safe_serialization=True)
             tokenizer.save_pretrained(str(full_dir))
         artifacts["full_model_dir"] = str(full_dir)
+        normalization = _repair_full_artifact(full_dir)
+        if normalization is not None:
+            artifacts["full_model_key_normalization"] = normalization
     if smoke_tests:
         artifacts["smoke_tests"] = smoke_tests
     return artifacts
