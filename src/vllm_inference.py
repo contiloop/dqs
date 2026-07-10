@@ -70,6 +70,15 @@ def _engine_kwargs(first: Mapping[str, Any]) -> dict[str, Any]:
     tensor_parallel_size = int(inference_cfg.get("tensor_parallel_size", 1) or 1)
     if tensor_parallel_size > 1:
         kwargs["tensor_parallel_size"] = tensor_parallel_size
+    limit_mm_per_prompt = model_cfg.get(
+        "vllm_limit_mm_per_prompt",
+        inference_cfg.get("limit_mm_per_prompt"),
+    )
+    if isinstance(limit_mm_per_prompt, Mapping):
+        kwargs["limit_mm_per_prompt"] = {
+            str(modality): int(limit)
+            for modality, limit in limit_mm_per_prompt.items()
+        }
     if model_cfg.get("lora_adapter_path"):
         kwargs["enable_lora"] = True
         kwargs["max_loras"] = 1

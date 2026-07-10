@@ -1,5 +1,7 @@
 model:
   name_or_path: unsloth/Qwen3.5-4B-Base
+  prepared_dataset_repo: alwaysgood/financial-english-source-corpus-qwen35-1280
+  prepared_dataset_slug: financial-english-source-corpus-qwen35-1280
   family: qwen3.5
   size: 4b
   variant: base

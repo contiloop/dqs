@@ -1,0 +1,17 @@
+model:
+  name_or_path: google/gemma-4-E2B-it
+  prepared_dataset_repo: alwaysgood/financial-english-source-corpus-gemma4-e2b-1280
+  prepared_dataset_slug: financial-english-source-corpus-gemma4-e2b-1280
+  family: gemma4
+  size: e2b
+  variant: instruct
+  # Gemma 4 is multimodal, but DQS uses its text path only.
+  is_vision_model: true
+  trust_remote_code: true
+  use_hf_chat_template: true
+  enable_thinking: false
+  require_thinking_control: false
+  vllm_limit_mm_per_prompt:
+    image: 0
+    audio: 0
+  tokenizer_revision: main

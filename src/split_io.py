@@ -129,13 +129,30 @@ def chunked_row(
     identifier = out.get("id")
     if isinstance(identifier, str):
         out["id"] = f"{identifier}__chunk_{chunk_idx}"
-    metadata_value = out.get("metadata")
-    metadata = dict(metadata_value) if isinstance(metadata_value, dict) else {}
+    metadata_field = "metadata"
+    metadata_value = out.get(metadata_field)
+    if isinstance(metadata_value, dict):
+        metadata = dict(metadata_value)
+    elif isinstance(out.get("metadata_json"), str):
+        # The prepared financial corpus keeps metadata as a JSON string.  Keep
+        # that schema when recording split provenance; adding a new dict field
+        # only to split rows would otherwise be discarded by the parquet writer.
+        metadata_field = "metadata_json"
+        try:
+            parsed_metadata = json.loads(out[metadata_field])
+        except json.JSONDecodeError:
+            parsed_metadata = None
+        metadata = dict(parsed_metadata) if isinstance(parsed_metadata, dict) else {}
+    else:
+        metadata = {}
     metadata["split_parent_id"] = identifier if isinstance(identifier, str) else str(row_index)
     metadata["split_parent_row_index"] = row_index
     metadata["split_chunk_idx"] = chunk_idx
     metadata["split_chunk_count"] = chunk_count
-    out["metadata"] = metadata
+    if metadata_field == "metadata_json":
+        out[metadata_field] = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+    else:
+        out[metadata_field] = metadata
     return out
 
 

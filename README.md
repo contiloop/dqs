@@ -224,6 +224,34 @@ make train TRAIN_OVERRIDES='training=full'
 make train TRAIN_OVERRIDES='run.seed=7'
 ```
 
+### Gemma 4 text-only setup
+
+Gemma 4 E2B IT is supported as a text-only DQS student/SFT model. It uses the
+model chat template with thinking disabled and freezes its vision layers. Build
+a Gemma-tokenized prepared dataset before training; do not reuse the
+Qwen-tokenized prepared corpus.
+
+```sh
+make preprocess-raw PREPROCESS_TOKENIZER_MODEL=google/gemma-4-E2B-it \
+  PREPROCESS_OUTPUT_DIR=data/prepared/financial-english-source-corpus-gemma4-e2b-1280-rebuilt
+make smoke-sft-max-context \
+  SMOKE_OVERRIDES='model=gemma4_e2b_it training=full training.dataloader_num_workers=0'
+```
+
+The rebuilt prepared folder can be published as its own Hugging Face dataset
+repo. Inspect the file list first, then repeat without `UPLOAD_DRY_RUN=1` to
+perform the upload.
+
+```sh
+make upload-run \
+  HF_DATASET_REPO=alwaysgood/financial-english-source-corpus-gemma4-e2b-1280 \
+  UPLOAD_RUN_DIR=data/prepared/financial-english-source-corpus-gemma4-e2b-1280-rebuilt \
+  UPLOAD_PATH_IN_REPO=. \
+  UPLOAD_CREATE_REPO=1 \
+  UPLOAD_PRIVATE=0 \
+  UPLOAD_DRY_RUN=1
+```
+
 Subset artifacts are written under:
 
 ```text

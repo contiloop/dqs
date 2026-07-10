@@ -4,5 +4,6 @@ run:
   id: ${model.family}_${model.size}_${model.variant}_${training.tuning_mode}_${run.student_filter_tag}_seed${run.seed}
   profile: real
   subset_start: 0
-  subset_end: null
+  # End is exclusive: process the 23 full subsets subset_000 through subset_022.
+  subset_end: 23
   hydra_chdir: false

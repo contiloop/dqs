@@ -1,10 +1,10 @@
 data:
   raw_dataset_repo: alwaysgood/financial-english-source-corpus
-  prepared_dataset_repo: alwaysgood/financial-english-source-corpus-qwen35-1280
+  prepared_dataset_repo: ${model.prepared_dataset_repo}
   use_prepared_dataset: true
   prepared_download:
     revision: main
-    local_dir: data/prepared/financial-english-source-corpus-qwen35-1280
+    local_dir: data/prepared/${model.prepared_dataset_slug}
     workers: 16
     allow_patterns:
       - "*.parquet"
@@ -18,7 +18,7 @@ data:
     revision: main
     tokenizer_model: ${model.name_or_path}
     tokenizer_revision: main
-    output_dir: data/prepared/financial-english-source-corpus-qwen35-1280-rebuilt
+    output_dir: data/prepared/${model.prepared_dataset_slug}-rebuilt
     workers: 16
     rows_per_shard: 50000
     task_buffer_size: 256

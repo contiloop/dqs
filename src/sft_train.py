@@ -762,11 +762,14 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     artifacts: dict[str, Any] = {}
     smoke_tests: list[dict[str, Any]] = []
     trust_remote_code = bool(_get(cfg, "model.trust_remote_code", False))
+    model_family = str(_get(cfg, "model.family", "")).strip().lower()
     normalize_full_keys = bool(training_cfg.get("normalize_full_weight_checkpoint_keys", True))
     assert_full_keys = bool(training_cfg.get("assert_full_weight_checkpoint_keys", True))
 
     def _repair_full_artifact(path: Path) -> dict[str, Any] | None:
-        if tuning_mode != "full":
+        # This repair exists solely for a Qwen3.5 save-key regression.  Avoid
+        # re-reading every Gemma safetensor after a successful full-model save.
+        if tuning_mode != "full" or model_family != "qwen3.5":
             return None
         normalization = None
         if normalize_full_keys:
