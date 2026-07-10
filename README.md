@@ -231,6 +231,36 @@ model chat template with thinking disabled and freezes its vision layers. Build
 a Gemma-tokenized prepared dataset before training; do not reuse the
 Qwen-tokenized prepared corpus.
 
+On an external training instance, download the published Gemma-tokenized corpus
+explicitly. This is separate from the Gemma model weights: Unsloth/vLLM fetches
+`google/gemma-4-E2B-it` into the Hugging Face cache on its first use. Log in to
+Hugging Face with an account that can access that model before starting.
+
+```sh
+python -c "from huggingface_hub import login; login()"
+
+make download-prepared-data \
+  HF_DATASET_REPO=alwaysgood/financial-english-source-corpus-gemma4-e2b-1280 \
+  HF_DATASET_LOCAL_DIR=data/prepared/financial-english-source-corpus-gemma4-e2b-1280
+```
+
+Then run the normal staged training flow with the Gemma model and full-training
+profile. The default run configuration stops after the 23 full subsets
+(`subset_000` through `subset_022`).
+
+```sh
+make train-stage SFT_NPROC_PER_NODE=4 \
+  TRAIN_OVERRIDES='model=gemma4_e2b_it training=full inference.num_gpus=4 inference.tensor_parallel_size=1 inference.gpu_ids=[0,1,2,3] qe.selection.num_gpus=4 qe.selection.gpu_ids=[0,1,2,3]'
+```
+
+To run only SFT from an already-created subset artifact, use the same model and
+training overrides:
+
+```sh
+make sft SFT_SUBSET_IDX=0 SFT_NPROC_PER_NODE=4 \
+  SFT_OVERRIDES='model=gemma4_e2b_it training=full'
+```
+
 ```sh
 make preprocess-raw PREPROCESS_TOKENIZER_MODEL=google/gemma-4-E2B-it \
   PREPROCESS_OUTPUT_DIR=data/prepared/financial-english-source-corpus-gemma4-e2b-1280-rebuilt
