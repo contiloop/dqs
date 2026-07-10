@@ -1265,6 +1265,9 @@ def _run_raw_random_selection(
 ) -> list[dict[str, Any]]:
     subset_dir = _subset_root(cfg, subset_idx)
     runtime_dir = subset_dir / "runtime_io"
+    # This path is intentionally a legacy ablation: it samples raw input rows
+    # before student inference, student filtering, and QE. The normal
+    # data.qe_selection_order=random path goes through _run_qe_selection().
     write_jsonl(runtime_dir / "infer-student.input.jsonl", [])
     write_jsonl(runtime_dir / "infer-student.output.jsonl", [])
     write_jsonl(subset_dir / "student_translations.jsonl", [])
@@ -1367,7 +1370,10 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
 
 
 def _raw_random_baseline_enabled(cfg: Mapping[str, Any]) -> bool:
-    return _qe_selection_order(cfg) == "random"
+    enabled = bool(_get(cfg, "data.raw_random_baseline", False))
+    if enabled and _qe_selection_order(cfg) != "random":
+        raise SystemExit("data.raw_random_baseline=true requires data.qe_selection_order=random")
+    return enabled
 
 
 def _raw_random_selection_artifact_error(
@@ -1389,6 +1395,8 @@ def _raw_random_selection_artifact_error(
     for row in selected_rows:
         if row.get("selection_rule") != "random_raw_length_bucket_candidate_pool":
             return "raw random selected_for_teacher has an unexpected selection_rule"
+        if row.get("student_status") != "skipped_raw_random":
+            return "raw random selected_for_teacher has unexpected student_status"
     if input_rows and not selected_rows:
         return "raw random selected_for_teacher is empty despite non-empty input"
     return None

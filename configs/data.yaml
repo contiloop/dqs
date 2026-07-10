@@ -32,7 +32,11 @@ data:
   subset_size: 100000
   selection_ratio: 0.01
   teacher_target_per_subset: 1000
+  # low/high/random all run student inference, student filtering, and QE first.
+  # random then samples from the clean QE-scored candidate pool with a seed-stable hash.
   qe_selection_order: low  # low, high, random
+  # Legacy ablation only: true skips student inference/QE and samples directly from raw input rows.
+  raw_random_baseline: false
   length_bucket_selection:
     enabled: true
     quota_strategy: proportional
@@ -61,6 +65,7 @@ data:
     student_require_valid_output: true
     reject_repetition: true
     reject_thinking_trace: true
+    reject_prompt_artifact: true
     reject_foreign_passthrough: false
     reject_english_passthrough: true
     reject_wrong_script_heavy: true
@@ -80,10 +85,22 @@ data:
       hangul_ratio_max: 0.05
       latin_ratio_min: 0.50
       source_token_overlap_min: 0.55
+      partial_copy_min_text_chars: 6
+      partial_copy_min_source_chars: 20
+      partial_copy_hangul_ratio_max: 0.05
+      partial_copy_latin_ratio_min: 0.50
+      partial_copy_mt_source_precision_min: 0.80
+      partial_copy_max_mt_tokens: 12
+      partial_copy_min_source_tokens: 5
       sentence_min_text_chars: 40
       sentence_hangul_ratio_max: 0.05
       sentence_latin_like_ratio_min: 0.35
       sentence_source_token_overlap_min: 0.55
+    prompt_artifact:
+      labels:
+        min_text_chars: 8
+        latin_like_ratio_min: 0.20
+        hangul_ratio_max: 0.45
     wrong_script_light:
       min_text_chars: 30
       wrong_script_char_count_min: 3

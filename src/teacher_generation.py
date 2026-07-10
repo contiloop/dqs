@@ -399,6 +399,25 @@ def _candidate_item(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _validate_teacher_candidate_drafts(candidates: list[dict[str, Any]]) -> None:
+    missing: list[str] = []
+    for row in candidates:
+        # Only the legacy raw-random ablation may call the teacher without a
+        # student draft. Normal low/high/random runs must pass SOURCE + DRAFT.
+        raw_random = (
+            row.get("selection_rule") == "random_raw_length_bucket_candidate_pool"
+            or row.get("student_status") == "skipped_raw_random"
+        )
+        if not raw_random and not str(row.get("student_translation", "")).strip():
+            missing.append(str(row.get("id", "")))
+    if missing:
+        preview = ", ".join(missing[:5])
+        raise SystemExit(
+            "teacher candidates are missing student_translation drafts; "
+            f"first_missing_ids={preview} count={len(missing)}"
+        )
+
+
 def _render_user_prompt(template: str, items: list[dict[str, Any]]) -> str:
     items_json = json.dumps(items, ensure_ascii=False, sort_keys=True, indent=2)
     item_blocks: list[str] = []
@@ -879,6 +898,7 @@ def run_teacher_generation(
     translation_tokenizer = _load_translation_tokenizer(cfg) if reject_over_max_output_tokens else None
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
+    _validate_teacher_candidate_drafts(candidates)
     bucket_plan = _teacher_bucket_plan(cfg=cfg, candidates=candidates, target=target)
     buckets = bucket_plan["buckets"]
     quotas = list(bucket_plan["quotas"])
