@@ -21,6 +21,8 @@ training:
   logging_steps: 1
   dataloader_num_workers: 4
   dataloader_shuffle: true
+  # LoRA trains only its adapter modules; keep DDP on the fixed-graph fast path.
+  ddp_find_unused_parameters: false
   resume_from_checkpoint: auto
   append_eos_token: true
   response_only_loss: true

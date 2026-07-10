@@ -677,7 +677,13 @@ def _training_argument_kwargs(
         "fp16": fp16,
         "report_to": [],
         "run_name": str(wandb_cfg.get("run_name", _get(cfg, "run.id", "dqs"))),
-        "ddp_find_unused_parameters": False if _world_size() > 1 else None,
+        # Text-only full SFT of a vision model can leave conditional parameters
+        # outside the loss graph.  Let the training profile opt into DDP's
+        # unused-parameter traversal for that case; retain LoRA's faster
+        # fixed-graph behaviour by default.
+        "ddp_find_unused_parameters": (
+            bool(training_cfg.get("ddp_find_unused_parameters", False)) if _world_size() > 1 else None
+        ),
     }
 
 

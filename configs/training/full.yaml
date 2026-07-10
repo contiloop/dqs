@@ -21,6 +21,9 @@ training:
   logging_steps: 1
   dataloader_num_workers: 4
   dataloader_shuffle: true
+  # Qwen3.5 is a vision model, but DQS SFT is text-only by default.  On DDP,
+  # allow parameters outside the text loss path to be unused in an iteration.
+  ddp_find_unused_parameters: true
   resume_from_checkpoint: auto
   append_eos_token: true
   response_only_loss: true
