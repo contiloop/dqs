@@ -140,6 +140,8 @@ PIN_FLASH_ATTN_VERSION ?= 2.8.3
 PIN_SETUPTOOLS_SPEC ?= "setuptools>=77.0.3,<81.0.0"
 # Keep numpy below 2.3 for numba compatibility while satisfying mistral-common.
 PIN_NUMPY_VERSION ?= 2.2.6
+# CUTLASS DSL requires protobuf 6.x; prevent dependency upgrades from pulling 7.x.
+PIN_PROTOBUF_SPEC ?= "protobuf>=6.30.2,<7"
 # Keep FLA aligned with torch 2.10 runtime and avoid transitive resolver drift.
 PIN_FLA_CORE_VERSION ?= 0.4.2
 PIN_FLASH_LINEAR_ATTENTION_VERSION ?= 0.4.2
@@ -226,7 +228,9 @@ set:
 		"transformers==$(PIN_TRANSFORMERS_VERSION)" \
 		"huggingface_hub>=$(PIN_HF_HUB_VERSION),<2" \
 		"hf-xet>=$(PIN_HF_XET_VERSION),<2"
-	@$(REAL_ENV_PY) -m pip install --upgrade "numpy==$(PIN_NUMPY_VERSION)"
+	@$(REAL_ENV_PY) -m pip install --upgrade \
+		"numpy==$(PIN_NUMPY_VERSION)" \
+		$(PIN_PROTOBUF_SPEC)
 	# FlashAttention2: choose wheel by GPU arch (sm80/sm120) when possible.
 	@arch_choice="$(FLASH_ATTN_GPU_ARCH)"; \
 	selected_whl="$(FLASH_ATTN_WHL)"; \
@@ -259,7 +263,9 @@ set:
 		|| $(REAL_ENV_PY) -m pip install --no-deps \
 			"fla-core==$(PIN_FLA_CORE_VERSION)" \
 			"flash-linear-attention==$(PIN_FLASH_LINEAR_ATTENTION_VERSION)"
-	@$(REAL_ENV_PY) -m pip install --upgrade "numpy==$(PIN_NUMPY_VERSION)"
+	@$(REAL_ENV_PY) -m pip install --upgrade \
+		"numpy==$(PIN_NUMPY_VERSION)" \
+		$(PIN_PROTOBUF_SPEC)
 	@$(MAKE) verify-cuda-kernels REAL_ENV_PY=$(REAL_ENV_PY) SKIP_CAUSAL_CONV1D=$(SKIP_CAUSAL_CONV1D)
 	@$(REAL_ENV_PY) -c 'import sys, torch; print("set-real-env:", sys.executable, "torch", torch.__version__)'
 	@echo "set-real-env: setting up QE isolation venv at $(QE_VENV_DIR)..."
