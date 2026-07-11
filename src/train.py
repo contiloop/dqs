@@ -2477,7 +2477,7 @@ def main() -> None:
         "raw_random_baseline": raw_random_baseline,
         "selected_for_teacher_rows": len(selected_rows),
         "all_qe_score_mean": _mean_qe_score_from_file(subset_dir / "qe_scores.jsonl"),
-        "selected_qe_score_mean": _mean_qe_score(selected_rows),
+        "selected_qe_score_mean": _mean_qe_score_from_file(subset_dir / "golden_pairs.jsonl"),
         "teacher_accepted_rows": teacher_summary.get("teacher_accepted_rows", 0),
         "teacher_rejected_rows": teacher_summary.get("teacher_rejected_rows", 0),
         "teacher_shortfall_rows": teacher_summary.get("teacher_shortfall_rows", 0),
