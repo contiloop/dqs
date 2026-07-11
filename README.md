@@ -26,28 +26,11 @@ Runtime version notes:
 - Hugging Face transfer stack: `huggingface_hub>=1.14.0,<2`, `hf-xet>=1.5.0,<2`
 - FlashAttention2: `flash-attn==2.8.3`
 - NumPy: `numpy==2.2.6`
-- Protobuf: `>=6.30.2,<7`
 
 `make set` also prepares isolated COMET and MetricX environments for
 evaluation. MetricX uses `pyarrow==20.0.0`, `protobuf==3.20.3`, and
 `fsspec==2023.6.0`, plus `numpy==1.26.4`, in its isolated environment for
 compatibility with its pinned old metric stack.
-
-All dependency-resolving installs for the main training environment use
-`constraints/main.txt`. It constrains the complete core stack, including
-Torch, Transformers, TRL, datasets, vLLM, xFormers, Hugging Face transfer
-packages, NumPy, and Protobuf. `make set` then runs `pip check` before creating
-the isolated evaluation environments, so a conflicting main-environment
-dependency fails setup before training starts.
-
-To update only the pinned Unsloth packages in an existing environment without
-letting pip replace shared dependencies such as NumPy or Protobuf, use:
-
-```sh
-python -m pip install --upgrade --force-reinstall --no-cache-dir --no-deps \
-  "unsloth==2026.7.2" \
-  "unsloth-zoo==2026.7.2"
-```
 
 ### 3. Configure access
 
