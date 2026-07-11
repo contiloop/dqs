@@ -66,6 +66,8 @@ instruct_templates:
     user: |
       Translate this from English to Korean:
 
+      Output only one Korean translation.
+
       English:
       {src}
 
@@ -137,3 +139,4 @@ instruct_templates:
       {src}
 
       한국어로 번역해줘.
+      한국어 번역문만 출력하세요.

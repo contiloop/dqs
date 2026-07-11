@@ -21,6 +21,7 @@ from text_tokenization import text_token_ids
 TeacherLabel = Literal["no_change", "minor", "major", "critical", "invalid"]
 TEACHER_ACCEPTED_LABELS = ("no_change", "minor", "major", "critical")
 INVALID_REASON_KO = "독립적으로 번역하기 어려운 원문"
+INVALID_DRAFT_FORMAT_REASON_KO = "번역문 외의 설명·선택지·분석이 포함된 초안"
 TeacherErrorType = Literal[
     "mistranslation",
     "omission",
@@ -62,7 +63,8 @@ class TeacherBatchOutput(BaseModel):
 def _normalize_teacher_output_item(item: TeacherOutputItem) -> TeacherOutputItem:
     if item.label == "invalid":
         item.final_translation = None
-        item.invalid_reason_ko = INVALID_REASON_KO
+        if item.invalid_reason_ko not in {INVALID_REASON_KO, INVALID_DRAFT_FORMAT_REASON_KO}:
+            item.invalid_reason_ko = INVALID_REASON_KO
         item.errors = []
     else:
         item.invalid_reason_ko = None

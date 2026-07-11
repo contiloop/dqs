@@ -15,13 +15,14 @@ Adapt terminology, tone, and register to the content type, domain, audience, SOU
 Use these inferences only to choose the appropriate Korean phrasing, formality, and technical vocabulary. Do not include this analysis in the output.
 
 Rewrite policy:
+- Priority rule for invalid DRAFT format: If DRAFT contains multiple translation options, explanations, analysis, breakdowns, recommendations, markdown commentary, or any text not requested by SOURCE, label it invalid regardless of whether one embedded option is semantically correct. Evaluate the complete DRAFT, not its best embedded sentence. Do not reuse or correct any part of the DRAFT. Set final_translation to null, set errors to [], and set invalid_reason_ko exactly to "번역문 외의 설명·선택지·분석이 포함된 초안". This DRAFT-based invalid rule is an explicit exception to the SOURCE-based invalid rules below.
 - no_change: DRAFT is already accurate, natural, and faithful to SOURCE. No edit is needed. In this case, keep DRAFT as the final translation.
 - minor: Awkward but understandable. Only small terminology, wording, punctuation, grammar, fluency, or formatting fixes are needed.
 - major: Disrupts flow. The meaning is recoverable, but only with effort. Substantial edits are needed, but DRAFT still provides useful structure or partial meaning.
 - critical: SOURCE is translatable, but DRAFT is unusable or nearly unusable due to meaning distortion, omission, hallucination, wrong terminology, severe unnaturalness, or unreliable structure. Ignore DRAFT phrasing and re-translate SOURCE from scratch.
 - invalid: SOURCE itself is not translatable or invalid. This includes cases where SOURCE is empty, corrupted, nonsensical, or incomplete to the point that a faithful Korean translation cannot be produced. If the English sentence or passage appears truncated or incomplete and the core meaning cannot be determined, label it invalid. Provide a short Korean reason instead of a translation.
 
-Do not label a case as invalid merely because DRAFT is poor. If SOURCE is translatable, produce a final Korean translation and use critical when DRAFT is unusable.
+Except for the priority rule for invalid DRAFT format above, do not label a case as invalid merely because DRAFT is poor. If SOURCE is translatable, produce a final Korean translation and use critical when DRAFT is unusable.
 Do not label SOURCE as invalid merely because it is a headline, title, bullet point, table entry, caption, label, or grammatical fragment, as long as it is meaningfully translatable and useful as a standalone training pair.
 
 Label SOURCE as invalid if it is an orphaned table, header, footer, list artifact, partial table row, detached column label, OCR/layout residue, or a fragment whose semantic relation cannot be determined without missing surrounding table or document context. Do not preserve such cases merely because the individual words can be translated literally. A valid SOURCE must contain enough standalone semantic content to produce a faithful Korean translation useful for training.
@@ -30,7 +31,7 @@ Examples of invalid SOURCE:
 - "High Close Low Close Fourth Quarter..........................."
 - "Joy, PA Manufacturing(P) 33,000 Owned Mt."
 
-For these cases, set label to invalid and set invalid_reason_ko exactly to "독립적으로 번역하기 어려운 원문". Do not invent a different invalid reason.
+For SOURCE-based invalid cases, set label to invalid and set invalid_reason_ko exactly to "독립적으로 번역하기 어려운 원문". For the priority rule for invalid DRAFT format, use exactly "번역문 외의 설명·선택지·분석이 포함된 초안". Do not invent a different invalid reason.
 
 Translation principles:
 
@@ -123,7 +124,7 @@ The JSON object must have exactly these top-level fields:
 {
   "label": "no_change | minor | major | critical | invalid",
   "final_translation": "final Korean translation, or null if invalid",
-  "invalid_reason_ko": "독립적으로 번역하기 어려운 원문 if label is invalid, otherwise null",
+  "invalid_reason_ko": "one of the two exact Korean invalid reasons defined above if label is invalid, otherwise null",
   "errors": [
     {
       "error_span_target": "exact incorrect Korean span from DRAFT, or null if the issue is an omission",
@@ -147,7 +148,7 @@ JSON rules:
 Output field rules:
 - If label is no_change, final_translation must be exactly DRAFT and errors must be [].
 - If label is minor, major, or critical, final_translation must contain the corrected final Korean translation.
-- If label is invalid, final_translation must be null, invalid_reason_ko must be exactly "독립적으로 번역하기 어려운 원문", and errors must be [].
+- If label is invalid, final_translation must be null, invalid_reason_ko must be exactly one of the two Korean invalid reasons defined above, and errors must be [].
 - If label is not invalid, invalid_reason_ko must be null.
 
 Error annotation rules:
