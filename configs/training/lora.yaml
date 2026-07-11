@@ -1,6 +1,5 @@
 training:
   backend: unsloth
-  allow_hf_backend: false
   tuning_mode: lora
   dtype: auto
   load_in_4bit: false

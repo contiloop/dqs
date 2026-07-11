@@ -233,53 +233,8 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
         raise SystemExit("model config must be a mapping")
     if not isinstance(training_cfg, Mapping):
         raise SystemExit("training config must be a mapping")
-    backend = str(training_cfg.get("backend", "unsloth")).strip().lower()
-    if backend == "hf":
-        if not bool(training_cfg.get("allow_hf_backend", False)):
-            raise SystemExit("training.backend=hf requires training.allow_hf_backend=true")
-        if str(training_cfg.get("tuning_mode", "")).lower() != "full":
-            raise SystemExit("training.backend=hf currently supports full tuning only")
-        try:
-            from transformers import AutoModelForImageTextToText, AutoTokenizer
-        except (ImportError, ModuleNotFoundError) as exc:
-            raise SystemExit("Transformers with Gemma 4 support is required for training.backend=hf") from exc
-
-        dtype = _torch_dtype(training_cfg.get("dtype", "auto"))
-        load_kwargs: dict[str, Any] = {
-            "pretrained_model_name_or_path": str(model_cfg["name_or_path"]),
-            "dtype": dtype if dtype is not None else "auto",
-            "trust_remote_code": bool(model_cfg.get("trust_remote_code", False)),
-            "attn_implementation": str(model_cfg.get("hf_attn_implementation", "eager")),
-            "revision": str(model_cfg.get("revision", model_cfg.get("tokenizer_revision", "main"))),
-        }
-        with _unsloth_output_context():
-            model = AutoModelForImageTextToText.from_pretrained(**load_kwargs)
-            tokenizer = AutoTokenizer.from_pretrained(
-                str(model_cfg["name_or_path"]),
-                revision=str(model_cfg.get("revision", model_cfg.get("tokenizer_revision", "main"))),
-                trust_remote_code=bool(model_cfg.get("trust_remote_code", False)),
-            )
-        if training_cfg.get("gradient_checkpointing", False) not in {False, None, "false", "none", "off"}:
-            try:
-                model.gradient_checkpointing_enable(
-                    gradient_checkpointing_kwargs={"use_reentrant": False}
-                )
-            except TypeError:
-                model.gradient_checkpointing_enable()
-            for candidate in (
-                model,
-                getattr(model, "model", None),
-                getattr(getattr(model, "model", None), "language_model", None),
-            ):
-                config = getattr(candidate, "config", None)
-                if config is not None and hasattr(config, "use_cache"):
-                    config.use_cache = False
-        tokenizer_backend = text_tokenizer(tokenizer)
-        if getattr(tokenizer_backend, "pad_token", None) is None and getattr(tokenizer_backend, "eos_token", None) is not None:
-            tokenizer_backend.pad_token = tokenizer_backend.eos_token
-        return model, tokenizer, None
-    if backend != "unsloth":
-        raise SystemExit(f"unsupported training.backend={backend!r}")
+    if str(training_cfg.get("backend", "unsloth")).strip().lower() != "unsloth":
+        raise SystemExit("training.backend must be unsloth")
 
     with _unsloth_output_context():
         model_api = _resolve_model_api(cfg)

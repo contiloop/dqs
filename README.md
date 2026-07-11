@@ -127,15 +127,6 @@ reducer failures that surface only at the next iteration are covered:
 make smoke-sft-max-context
 ```
 
-For a native Transformers comparison using the same tokenizer, tokenized rows,
-completion-only labels, DDP layout, and two-step smoke (without Unsloth):
-
-```sh
-make smoke-sft-max-context-hf \
-  SFT_NPROC_PER_NODE=4 \
-  SMOKE_OVERRIDES='model=gemma4_e2b_it training=full training.dataloader_num_workers=0'
-```
-
 Run the small end-to-end cycle smoke. This uses two 4-row subsets and exercises
 student inference, filtering, teacher generation, SFT, and smoke eval:
 

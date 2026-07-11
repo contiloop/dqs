@@ -8,7 +8,6 @@ model:
   # Gemma 4 is multimodal, but DQS uses its text path only.
   is_vision_model: true
   trust_remote_code: false
-  hf_attn_implementation: sdpa
   use_hf_chat_template: true
   enable_thinking: false
   require_thinking_control: false
