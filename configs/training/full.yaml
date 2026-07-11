@@ -22,8 +22,8 @@ training:
   logging_steps: 1
   dataloader_num_workers: 4
   dataloader_shuffle: true
-  # DQS SFT is text-only by default even for vision models. On DDP,
-  # allow parameters outside the text loss path to be unused in an iteration.
+  # Qwen full SFT needs unused-parameter traversal for its text-only path.
+  # Model profiles may override this when activation checkpointing conflicts.
   ddp_find_unused_parameters: true
   resume_from_checkpoint: auto
   append_eos_token: true

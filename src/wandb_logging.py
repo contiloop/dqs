@@ -43,10 +43,11 @@ def wandb_run_id(cfg: Mapping[str, Any]) -> str | None:
 
 
 def configure_wandb_env(cfg: Mapping[str, Any]) -> None:
-    if not wandb_enabled(cfg):
-        return
     os.environ["WANDB_CONSOLE"] = "off"
     os.environ.setdefault("WANDB_SILENT", "true")
+    if not wandb_enabled(cfg):
+        os.environ["WANDB_MODE"] = "disabled"
+        return
     if not _is_main_process():
         os.environ["WANDB_MODE"] = "disabled"
         return

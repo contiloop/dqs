@@ -682,7 +682,15 @@ def _training_argument_kwargs(
         # unused-parameter traversal for that case; retain LoRA's faster
         # fixed-graph behaviour by default.
         "ddp_find_unused_parameters": (
-            bool(training_cfg.get("ddp_find_unused_parameters", False)) if _world_size() > 1 else None
+            bool(
+                _get(
+                    cfg,
+                    "model.ddp_find_unused_parameters",
+                    training_cfg.get("ddp_find_unused_parameters", False),
+                )
+            )
+            if _world_size() > 1
+            else None
         ),
     }
 
@@ -889,6 +897,9 @@ def run_sft_training(
     stage_scheduler_total_steps: int | None = None,
     force_save_checkpoint: bool = False,
 ) -> dict[str, Any]:
+    # Set console-capture policy before importing/loading Unsloth. Some of its
+    # import-time patches otherwise inherit a temporary redirected stream.
+    configure_wandb_env(cfg)
     dataset_path_obj = Path(dataset_path) if dataset_path else _default_sft_dataset_path(cfg, subset_idx)
     if not dataset_path_obj.exists():
         raise SystemExit(f"missing SFT dataset: {dataset_path_obj}")

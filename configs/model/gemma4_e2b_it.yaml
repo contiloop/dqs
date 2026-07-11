@@ -11,6 +11,9 @@ model:
   use_hf_chat_template: true
   enable_thinking: false
   require_thinking_control: false
+  # Gemma 4 uses reentrant activation checkpointing. PyTorch DDP requires
+  # unused-parameter traversal to be disabled for that path.
+  ddp_find_unused_parameters: false
   vllm_limit_mm_per_prompt:
     image: 0
     audio: 0

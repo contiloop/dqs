@@ -7,6 +7,12 @@ import warnings
 from collections.abc import Iterator
 
 
+# Keep the redirected stream alive for the whole process. Import-time wrappers
+# in W&B and Unsloth can retain the current stream after this context exits;
+# closing a per-context devnull then causes later logging to fail.
+_QUIET_STREAM = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
+
 def _env_flag(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -57,6 +63,5 @@ def quiet_third_party_output() -> Iterator[None]:
         yield
         return
 
-    with open(os.devnull, "w", encoding="utf-8") as devnull:
-        with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-            yield
+    with contextlib.redirect_stdout(_QUIET_STREAM), contextlib.redirect_stderr(_QUIET_STREAM):
+        yield

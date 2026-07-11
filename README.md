@@ -231,7 +231,10 @@ make train TRAIN_OVERRIDES='run.seed=7'
 Gemma 4 E2B IT is supported as a text-only DQS student/SFT model. It uses the
 model chat template with thinking disabled and freezes its vision layers. Build
 a Gemma-tokenized prepared dataset before training; do not reuse the
-Qwen-tokenized prepared corpus.
+Qwen-tokenized prepared corpus. Its model profile also disables DDP
+unused-parameter traversal because Gemma 4's reentrant activation checkpointing
+is incompatible with `find_unused_parameters=true`; Qwen full training keeps
+that traversal enabled.
 
 On an external training instance, download the published Gemma-tokenized corpus
 explicitly. This is separate from the Gemma model weights: Unsloth/vLLM fetches
