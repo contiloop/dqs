@@ -168,6 +168,12 @@ official Gemma 4 text notebook. The selected API is printed at model load and
 recorded as `unsloth_model_api` in the SFT summary. Other multimodal profiles
 continue to use `FastVisionModel` by default.
 
+Gemma 4 E2B has 20 trailing KV-shared decoder layers. Their local `k_norm`,
+`k_proj`, and `v_proj` weights are structurally bypassed by the shared-KV
+forward path, so DQS freezes those 60 parameters before DDP wrapping. The
+count is recorded as `structurally_frozen_parameter_count`, and the exact names
+are written to `audit/structurally_frozen_parameters.json`.
+
 By default, `make train-stage` runs validation eval after every subset. To use
 a wider cadence:
 

@@ -330,6 +330,57 @@ def _freeze_non_text_parameters(model: Any) -> int:
     return frozen
 
 
+def _gemma4_structurally_unused_shared_kv_parameter_names(model: Any) -> list[str]:
+    config = getattr(model, "config", None)
+    text_config = getattr(config, "text_config", config)
+    model_type = str(getattr(text_config, "model_type", "") or "").lower()
+    if not model_type.startswith("gemma4"):
+        return []
+
+    num_hidden_layers = int(getattr(text_config, "num_hidden_layers", 0) or 0)
+    num_kv_shared_layers = int(getattr(text_config, "num_kv_shared_layers", 0) or 0)
+    if num_hidden_layers <= 0 or num_kv_shared_layers <= 0:
+        return []
+    first_shared_layer = num_hidden_layers - num_kv_shared_layers
+    unused_attention_parts = {"k_norm", "k_proj", "v_proj"}
+    names: list[str] = []
+    for name, _ in model.named_parameters():
+        if _contains_non_text_modality_module_name(name):
+            continue
+        parts = name.split(".")
+        for idx, part in enumerate(parts):
+            if part != "layers" or idx + 3 >= len(parts):
+                continue
+            layer_text = parts[idx + 1]
+            if not layer_text.isdigit() or parts[idx + 2] != "self_attn":
+                continue
+            if int(layer_text) >= first_shared_layer and parts[idx + 3] in unused_attention_parts:
+                names.append(name)
+            break
+    return names
+
+
+def _freeze_gemma4_structurally_unused_shared_kv_parameters(model: Any) -> list[str]:
+    unused_names = set(_gemma4_structurally_unused_shared_kv_parameter_names(model))
+    for name, parameter in model.named_parameters():
+        if name in unused_names:
+            parameter.requires_grad_(False)
+    frozen_names = sorted(unused_names)
+    setattr(model, "_dqs_structurally_frozen_parameter_names", frozen_names)
+    return frozen_names
+
+
+def _write_structural_freeze_audit(path: Path, model: Any) -> None:
+    names = list(getattr(model, "_dqs_structurally_frozen_parameter_names", []))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "reason": "gemma4_shared_kv_parameters_are_not_used_by_the_forward_path",
+        "frozen_parameter_count": len(names),
+        "frozen_parameter_names": names,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
 def _write_lora_target_audit(path: Path, model: Any, target_modules: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     trainable = []
@@ -354,6 +405,7 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
         if not bool(training_cfg.get("train_vision_layers", False)):
             _freeze_non_text_parameters(model)
             _ensure_no_non_text_trainable_parameters(model)
+        _freeze_gemma4_structurally_unused_shared_kv_parameters(model)
         return model
     lora_cfg = training_cfg.get("lora")
     if not isinstance(lora_cfg, Mapping):
@@ -387,6 +439,7 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
         model = _call_with_supported_kwargs(model_api.get_peft_model, peft_kwargs)
     if not bool(training_cfg.get("train_vision_layers", False)):
         _ensure_no_non_text_trainable_parameters(model)
+    _freeze_gemma4_structurally_unused_shared_kv_parameters(model)
     _write_lora_target_audit(audit_dir / "lora_target_modules.json", model, target_modules)
     return model
 
@@ -971,6 +1024,15 @@ def run_sft_training(
 
     with _rank0_progress_context("sft prepare-tuning", subset=f"subset_{subset_idx:03d}", mode=_get(cfg, "training.tuning_mode")):
         model = _apply_lora_if_needed(cfg, model, model_api, audit_dir)
+    structurally_frozen_names = list(getattr(model, "_dqs_structurally_frozen_parameter_names", []))
+    summary["structurally_frozen_parameter_count"] = len(structurally_frozen_names)
+    if _is_rank_zero() and structurally_frozen_names:
+        print(
+            "[dqs] sft structural-freeze "
+            f"reason=gemma4_shared_kv parameter_count={len(structurally_frozen_names)}",
+            flush=True,
+        )
+        _write_structural_freeze_audit(audit_dir / "structurally_frozen_parameters.json", model)
     from transformers import Trainer, set_seed
 
     set_seed(int(_get(cfg, "run.seed", 42) or 42))
