@@ -7,6 +7,9 @@ model:
   variant: instruct
   # Gemma 4 is multimodal, but DQS uses its text path only.
   is_vision_model: true
+  # Match Unsloth's official Gemma 4 text notebook. In Unsloth 2026.7.2,
+  # FastVisionModel subclasses FastModel without overriding its dispatch.
+  unsloth_model_api: fast_model
   trust_remote_code: false
   use_hf_chat_template: true
   enable_thinking: false

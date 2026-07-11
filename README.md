@@ -21,7 +21,7 @@ Runtime version notes:
 - CUDA wheel index: `https://download.pytorch.org/whl/cu128`
 - Torch stack: `torch==2.10.0`, `torchvision==0.25.0`, `torchaudio==2.10.0`
 - vLLM: `vllm==0.19.1`
-- Unsloth stack: `unsloth==2026.5.2`, `unsloth-zoo==2026.5.1`
+- Unsloth stack: `unsloth==2026.7.2`, `unsloth-zoo==2026.7.2`
 - HF training stack: `transformers==5.5.0`, `trl==0.24.0`, `datasets==3.4.1`
 - Hugging Face transfer stack: `huggingface_hub>=1.14.0,<2`, `hf-xet>=1.5.0,<2`
 - FlashAttention2: `flash-attn==2.8.3`
@@ -145,6 +145,11 @@ To test multiple training GPUs in the max-context SFT smoke:
 ```sh
 make smoke-sft-max-context SFT_NPROC_PER_NODE=4
 ```
+
+The Gemma text-only profile selects Unsloth's `FastModel`, matching the
+official Gemma 4 text notebook. The selected API is printed at model load and
+recorded as `unsloth_model_api` in the SFT summary. Other multimodal profiles
+continue to use `FastVisionModel` by default.
 
 By default, `make train-stage` runs validation eval after every subset. To use
 a wider cadence:

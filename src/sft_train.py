@@ -213,15 +213,28 @@ def _call_with_supported_kwargs(fn: Any, kwargs: Mapping[str, Any]) -> Any:
 
 def _resolve_model_api(cfg: Mapping[str, Any]) -> Any:
     model_cfg = _get(cfg, "model", {})
-    use_vision_api = bool(isinstance(model_cfg, Mapping) and model_cfg.get("is_vision_model", False))
+    if not isinstance(model_cfg, Mapping):
+        raise SystemExit("model config must be a mapping")
+    configured_api = str(model_cfg.get("unsloth_model_api", "auto")).strip().lower()
+    if configured_api == "auto":
+        configured_api = "fast_vision_model" if bool(model_cfg.get("is_vision_model", False)) else "fast_language_model"
     try:
-        if use_vision_api:
+        if configured_api == "fast_model":
+            from unsloth import FastModel
+
+            return FastModel
+        if configured_api == "fast_vision_model":
             from unsloth import FastVisionModel
 
             return FastVisionModel
-        from unsloth import FastLanguageModel
+        if configured_api == "fast_language_model":
+            from unsloth import FastLanguageModel
 
-        return FastLanguageModel
+            return FastLanguageModel
+        raise SystemExit(
+            "model.unsloth_model_api must be one of auto, fast_model, "
+            "fast_vision_model, or fast_language_model"
+        )
     except ModuleNotFoundError as exc:
         raise SystemExit("missing unsloth; run `make set` first") from exc
 
@@ -238,6 +251,8 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
 
     with _unsloth_output_context():
         model_api = _resolve_model_api(cfg)
+    if _is_rank_zero():
+        print(f"[dqs] sft model-api name={model_api.__name__}", flush=True)
     dtype = _torch_dtype(training_cfg.get("dtype", "auto"))
     load_kwargs = {
         "model_name": str(model_cfg["name_or_path"]),
@@ -933,6 +948,7 @@ def run_sft_training(
     summary: dict[str, Any] = {
         "run_id": _get(cfg, "run.id"),
         "training_backend": _get(cfg, "training.backend", "unsloth"),
+        "unsloth_model_api": model_api.__name__,
         "subset_idx": subset_idx,
         "sft_dataset_path": str(dataset_path_obj),
         "sft_rows": len(tokenized_rows),
