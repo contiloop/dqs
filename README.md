@@ -164,10 +164,12 @@ Run multi-GPU SFT:
 make sft SFT_SUBSET_IDX=0 SFT_NPROC_PER_NODE=4
 ```
 
-For text-only full SFT of the Qwen3.5 vision model, the `full` training profile
-enables DDP unused-parameter detection. This prevents a parameter outside the
-text loss path from aborting the next gradient-reduction iteration. LoRA keeps
-this disabled because only its adapter modules are trainable.
+For text-only full SFT of a vision model, the `full` training profile enables
+DDP unused-parameter detection. This prevents a parameter outside the text
+loss path from aborting the next gradient-reduction iteration. It keeps only
+the latest optimizer-bearing checkpoint for resume and one `final` full-model
+artifact; the duplicate `full_model` artifact is disabled. LoRA keeps unused
+parameter detection disabled because only its adapter modules are trainable.
 
 Resume from a specific phase:
 

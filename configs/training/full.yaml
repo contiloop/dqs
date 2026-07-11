@@ -17,7 +17,8 @@ training:
   max_steps: -1
   save_strategy: steps
   save_steps: 100
-  save_total_limit: null
+  # Keep only the latest optimizer-bearing checkpoint for stage resume.
+  save_total_limit: 1
   logging_steps: 1
   dataloader_num_workers: 4
   dataloader_shuffle: true
@@ -45,7 +46,8 @@ training:
   merge_smoke_test_required: false
   merge_smoke_test_mode: config_and_tokenizer
   save_final_model: true
-  save_full_model: true
+  # `final` already contains the full model; avoid a second identical copy.
+  save_full_model: false
   normalize_full_weight_checkpoint_keys: true
   assert_full_weight_checkpoint_keys: true
   max_seq_length: null
