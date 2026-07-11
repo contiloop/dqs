@@ -1,0 +1,15 @@
+# Core stack constraints for the main training environment.
+# Apply this file to every dependency-resolving install in `make set` so one
+# package upgrade cannot silently replace another pinned runtime component.
+torch==2.10.0
+torchvision==0.25.0
+torchaudio==2.10.0
+transformers==5.5.0
+trl==0.24.0
+datasets==3.4.1
+vllm==0.19.1
+xformers==0.0.34
+huggingface_hub>=1.14.0,<2
+hf-xet>=1.5.0,<2
+numpy==2.2.6
+protobuf>=6.30.2,<7

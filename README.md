@@ -33,6 +33,13 @@ evaluation. MetricX uses `pyarrow==20.0.0`, `protobuf==3.20.3`, and
 `fsspec==2023.6.0`, plus `numpy==1.26.4`, in its isolated environment for
 compatibility with its pinned old metric stack.
 
+All dependency-resolving installs for the main training environment use
+`constraints/main.txt`. It constrains the complete core stack, including
+Torch, Transformers, TRL, datasets, vLLM, xFormers, Hugging Face transfer
+packages, NumPy, and Protobuf. `make set` then runs `pip check` before creating
+the isolated evaluation environments, so a conflicting main-environment
+dependency fails setup before training starts.
+
 To update only the pinned Unsloth packages in an existing environment without
 letting pip replace shared dependencies such as NumPy or Protobuf, use:
 

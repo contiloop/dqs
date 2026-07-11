@@ -13,6 +13,7 @@ COMET_PYTHON ?= $(QE_VENV_DIR)/bin/python
 METRICX_VENV_DIR ?= $(HOME)/.venvs/metricx
 METRICX_PYTHON ?= $(METRICX_VENV_DIR)/bin/python
 METRICX_REPO_DIR ?= $(abspath ../metricx)
+MAIN_PIP_CONSTRAINTS ?= constraints/main.txt
 DQS_QUIET ?= 1
 DQS_PROGRESS ?= 1
 DQS_SHOW_UNSLOTH_LOGS ?= 1
@@ -202,23 +203,35 @@ set:
 	@$(REAL_ENV_PY) -c 'import sys; want=tuple(map(int, "$(PYTHON_VERSION)".split(".")[:2])); print("set-real-env: python", sys.version.split()[0]); sys.exit(f"set-real-env requires Python {want[0]}.{want[1]}, got {sys.version.split()[0]}") if sys.version_info[:2] != want else sys.exit(0)'
 	@$(REAL_ENV_PY) -m pip install --upgrade pip
 	@$(REAL_ENV_PY) -m pip install $(PIN_SETUPTOOLS_SPEC)
+	# Repair shared bounds before any large resolver transaction. This also
+	# makes rerunning setup safe after an interrupted or manual package upgrade.
+	@$(REAL_ENV_PY) -m pip install --upgrade \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
+		"numpy==$(PIN_NUMPY_VERSION)" \
+		$(PIN_PROTOBUF_SPEC)
 	@$(REAL_ENV_PY) -m pip install \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		--index-url $(TORCH_INDEX_URL) \
 		"torch==$(PIN_TORCH_VERSION)" \
 		"torchvision==$(PIN_TORCHVISION_VERSION)" \
 		"torchaudio==$(PIN_TORCHAUDIO_VERSION)"
 	@$(REAL_ENV_PY) -m pip install \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		"trl==$(PIN_TRL_VERSION)" \
 		"datasets==$(PIN_DATASETS_VERSION)"
 	@$(REAL_ENV_PY) -m pip install \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		"unsloth-zoo==$(PIN_UNSLOTH_ZOO_VERSION)" \
 		"unsloth==$(PIN_UNSLOTH_VERSION)"
 	@$(REAL_ENV_PY) -m pip uninstall -y vllm || true
 	@$(REAL_ENV_PY) -m pip install \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		"vllm==$(PIN_VLLM_VERSION)" \
 		--extra-index-url $(TORCH_INDEX_URL)
-	@$(REAL_ENV_PY) -m pip install --index-url $(TORCH_INDEX_URL) "xformers==0.0.34"
+	@$(REAL_ENV_PY) -m pip install -c "$(MAIN_PIP_CONSTRAINTS)" \
+		--index-url $(TORCH_INDEX_URL) "xformers==0.0.34"
 	@$(REAL_ENV_PY) -m pip install \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		tokenizers hydra-core omegaconf \
 		openai anthropic pydantic requests peft wandb sacrebleu \
 		sentencepiece bitsandbytes hf_transfer msgspec tyro torchao ninja
@@ -228,9 +241,6 @@ set:
 		"transformers==$(PIN_TRANSFORMERS_VERSION)" \
 		"huggingface_hub>=$(PIN_HF_HUB_VERSION),<2" \
 		"hf-xet>=$(PIN_HF_XET_VERSION),<2"
-	@$(REAL_ENV_PY) -m pip install --upgrade \
-		"numpy==$(PIN_NUMPY_VERSION)" \
-		$(PIN_PROTOBUF_SPEC)
 	# FlashAttention2: choose wheel by GPU arch (sm80/sm120) when possible.
 	@arch_choice="$(FLASH_ATTN_GPU_ARCH)"; \
 	selected_whl="$(FLASH_ATTN_WHL)"; \
@@ -248,6 +258,7 @@ set:
 	esac; \
 	echo "  flash_attn target: python=$$py_ver ($$py_tag) arch=$$arch_choice wheel=$$selected_whl"; \
 	if $(REAL_ENV_PY) -m pip install \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		"https://huggingface.co/datasets/$(FLASH_ATTN_REPO)/resolve/main/$$selected_whl"; then \
 		echo "  flash_attn wheel install ok: $$selected_whl"; \
 	else \
@@ -264,8 +275,10 @@ set:
 			"fla-core==$(PIN_FLA_CORE_VERSION)" \
 			"flash-linear-attention==$(PIN_FLASH_LINEAR_ATTENTION_VERSION)"
 	@$(REAL_ENV_PY) -m pip install --upgrade \
+		-c "$(MAIN_PIP_CONSTRAINTS)" \
 		"numpy==$(PIN_NUMPY_VERSION)" \
 		$(PIN_PROTOBUF_SPEC)
+	@$(REAL_ENV_PY) -m pip check
 	@$(MAKE) verify-cuda-kernels REAL_ENV_PY=$(REAL_ENV_PY) SKIP_CAUSAL_CONV1D=$(SKIP_CAUSAL_CONV1D)
 	@$(REAL_ENV_PY) -c 'import sys, torch; print("set-real-env:", sys.executable, "torch", torch.__version__)'
 	@echo "set-real-env: setting up QE isolation venv at $(QE_VENV_DIR)..."
