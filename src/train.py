@@ -1634,6 +1634,193 @@ def _student_records(
     return records
 
 
+def _restore_compact_front_artifacts(
+    *,
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+    subset_dir: Path,
+) -> int:
+    records = _require_jsonl(subset_dir / "student_records.jsonl", "student_records.jsonl")
+    model_cfg = _student_inference_model_cfg(cfg, subset_idx)
+    filter_summary = _read_json_if_exists(subset_dir / "student_filter_summary.json")
+    filter_enabled = bool(filter_summary.get("degeneration_filter_enabled", True))
+
+    input_rows: list[dict[str, Any]] = []
+    requests: list[dict[str, Any]] = []
+    responses: list[dict[str, Any]] = []
+    student_rows: list[dict[str, Any]] = []
+    filter_rows: list[dict[str, Any]] = []
+    qe_requests: list[dict[str, Any]] = []
+    qe_responses: list[dict[str, Any]] = []
+    qe_scores: list[dict[str, Any]] = []
+    selected_rows: list[dict[str, Any]] = []
+    blocked_rows: list[dict[str, Any]] = []
+
+    for idx, record in enumerate(records):
+        student = record.get("student", {})
+        filter_payload = record.get("filter", {})
+        qe = record.get("qe")
+        selection = record.get("selection", {})
+        if not isinstance(student, Mapping) or not isinstance(filter_payload, Mapping) or not isinstance(selection, Mapping):
+            raise SystemExit(f"invalid compact student record at index={idx}")
+
+        row_id = str(record.get("id", ""))
+        request_id = str(student.get("request_id", ""))
+        if not row_id or not request_id:
+            raise SystemExit(f"compact student record is missing id/request_id at index={idx}")
+        order_idx = int(student.get("order_idx", idx) if student.get("order_idx") is not None else idx)
+        source = str(record.get("source", ""))
+        translation = str(student.get("translation", ""))
+        status = str(student.get("status", "failed"))
+
+        input_row = {
+            "id": row_id,
+            "source": source,
+            "target": record.get("target"),
+            "metadata": record.get("metadata", {}),
+            "source_tokens": record.get("source_tokens"),
+        }
+        request = {
+            "id": request_id,
+            "run_id": str(_get(cfg, "run.id")),
+            "subset_idx": subset_idx,
+            "row_id": row_id,
+            "order_idx": order_idx,
+            "source": source,
+            "metadata": record.get("metadata", {}),
+            "prompt": "",
+            "prompt_template_id": student.get("prompt_template_id"),
+            "prompt_template_group": student.get("prompt_template_group"),
+            "prompt_template_hash": student.get("prompt_template_hash"),
+            "chat_template_applied": student.get("chat_template_applied"),
+            "model": dict(model_cfg),
+            "inference": {},
+            "decoding": {},
+        }
+        response = {
+            "id": request_id,
+            "row_id": row_id,
+            "order_idx": order_idx,
+            "status": status,
+            "mt": translation,
+            "error": student.get("error"),
+            "finish_reason": student.get("finish_reason"),
+            "generated_token_count": student.get("generated_token_count", 0),
+        }
+        student_row = {
+            **input_row,
+            "student_translation": translation,
+            "student_status": status,
+            "student_error": student.get("error"),
+            "finish_reason": student.get("finish_reason"),
+            "generated_token_count": student.get("generated_token_count", 0),
+            "request_id": request_id,
+            "run_id": str(_get(cfg, "run.id")),
+            "subset_idx": subset_idx,
+            "order_idx": order_idx,
+            "prompt_template_id": student.get("prompt_template_id"),
+            "prompt_template_group": student.get("prompt_template_group"),
+            "prompt_template_hash": student.get("prompt_template_hash"),
+            "chat_template_applied": student.get("chat_template_applied"),
+        }
+        filter_row = {
+            **student_row,
+            "degeneration_label": str(filter_payload.get("label", "unknown")),
+            "degeneration_flags": [],
+            "degeneration_filter_enabled": filter_enabled,
+            "degeneration_basic_validity_only": False,
+        }
+
+        input_rows.append(input_row)
+        requests.append(request)
+        responses.append(response)
+        student_rows.append(student_row)
+        filter_rows.append(filter_row)
+
+        if isinstance(qe, Mapping):
+            qe_request_id = str(qe.get("request_id", ""))
+            if not qe_request_id:
+                raise SystemExit(f"compact QE record is missing request_id for row_id={row_id}")
+            qe_order_idx = int(qe.get("order_idx", len(qe_requests)) if qe.get("order_idx") is not None else len(qe_requests))
+            qe_request = {
+                "id": qe_request_id,
+                "row_id": row_id,
+                "order_idx": qe_order_idx,
+                "backend": qe.get("backend"),
+                "model": qe.get("model"),
+                "src": source,
+                "mt": translation,
+            }
+            if bool(qe.get("requires_reference", False)):
+                qe_request["ref"] = record.get("target")
+            score = qe.get("score")
+            qe_response = {
+                "id": qe_request_id,
+                "row_id": row_id,
+                "order_idx": qe_order_idx,
+                "backend": qe.get("backend"),
+                "model": qe.get("model"),
+                "status": qe.get("status", "missing"),
+                "score": score,
+                "error": qe.get("error"),
+            }
+            qe_requests.append(qe_request)
+            qe_responses.append(qe_response)
+            qe_scores.append(
+                {
+                    "id": row_id,
+                    "request_id": qe_request_id,
+                    "qe_score": score,
+                }
+            )
+
+        candidate = dict(filter_row)
+        if isinstance(qe, Mapping):
+            candidate.update(
+                {
+                    "qe_score": qe.get("score"),
+                    "qe_backend": qe.get("backend"),
+                    "qe_model": qe.get("model"),
+                }
+            )
+        if bool(selection.get("selected_for_teacher", False)):
+            candidate.update(
+                {
+                    "selection_rank": selection.get("selection_rank"),
+                    "selection_rule": selection.get("selection_rule"),
+                    "length_bucket_idx": selection.get("length_bucket_idx"),
+                    "length_bucket": selection.get("length_bucket"),
+                }
+            )
+            selected_rows.append(candidate)
+        if bool(selection.get("blocked_by_filter", False)):
+            blocked = dict(candidate)
+            blocked.update(
+                {
+                    "selection_rank": selection.get("blocked_selection_rank"),
+                    "selection_rule": selection.get("blocked_selection_rule"),
+                    "length_bucket_idx": selection.get("blocked_length_bucket_idx"),
+                    "length_bucket": selection.get("blocked_length_bucket"),
+                }
+            )
+            blocked_rows.append(blocked)
+
+    selected_rows.sort(key=lambda row: int(row.get("selection_rank") or 10**12))
+    runtime_dir = subset_dir / "runtime_io"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    write_jsonl(subset_dir / "input.jsonl", input_rows)
+    write_jsonl(runtime_dir / "infer-student.input.jsonl", requests)
+    write_jsonl(runtime_dir / "infer-student.output.jsonl", responses)
+    write_jsonl(subset_dir / "student_translations.jsonl", student_rows)
+    write_jsonl(subset_dir / "student_filtered.jsonl", filter_rows)
+    write_jsonl(runtime_dir / "qe-selection.input.jsonl", qe_requests)
+    write_jsonl(runtime_dir / "qe-selection.output.jsonl", qe_responses)
+    write_jsonl(subset_dir / "qe_scores.jsonl", qe_scores)
+    write_jsonl(subset_dir / "selected_for_teacher.jsonl", selected_rows)
+    write_jsonl(subset_dir / "filter_blocked_selection.jsonl", blocked_rows)
+    return len(selected_rows)
+
+
 def _select_for_teacher(
     *,
     cfg: Mapping[str, Any],
@@ -2016,6 +2203,22 @@ def main() -> None:
 
     request_path = runtime_dir / "infer-student.input.jsonl"
     response_path = runtime_dir / "infer-student.output.jsonl"
+    compact_records_path = subset_dir / "student_records.jsonl"
+    if (
+        start_from_phase in {"teacher", "sft-dataset", "sft"}
+        and not (subset_dir / "input.jsonl").exists()
+        and compact_records_path.exists()
+    ):
+        restored_selected = _restore_compact_front_artifacts(
+            cfg=cfg,
+            subset_idx=subset_idx,
+            subset_dir=subset_dir,
+        )
+        progress(
+            "compact front artifacts restored",
+            subset=f"subset_{subset_idx:03d}",
+            selected_for_teacher=restored_selected,
+        )
     if "input" in skipped:
         input_rows = _require_jsonl(subset_dir / "input.jsonl", "input.jsonl")
     else:
