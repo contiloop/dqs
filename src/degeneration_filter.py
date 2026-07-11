@@ -20,6 +20,42 @@ _THINKING_TRACE_RE = re.compile(
     r"<\s*/?\s*think\s*>|\bwe need to translate\b|\blet'?s understand\b|\bpossible translation\b",
     re.IGNORECASE,
 )
+_PROMPT_ARTIFACT_RE = re.compile(
+    r"<\|im_(?:start|end)\|>|<\|endoftext\|>"
+    r"|(^|\n)\s*(?:system|assistant|user)\s*[:：]?\s*($|\n)"
+    r"|당신은\s*경제.*전문\s*번역가"
+    r"|전문(?:적인)?\s*영어\s*[-–—]\s*한국어\s*번역가"
+    r"|전문\s*번역가입니다"
+    r"|번역\s*지침"
+    r"|번역\s*결과만\s*출력"
+    r"|원문에\s*없는\s*설명"
+    r"|한국어\s*번역문만\s*출력"
+    r"|해당\s*문장.*영어.*한국어.*번역하세요"
+    r"|영어에서\s*한국어로\s*번역(?:하세요|해\s*주세요)"
+    r"|한국어로\s*번역해\s*주세요"
+    r"|다음\s*영어\s*(?:문장|텍스트|원문).*(?:번역|한국어)"
+    r"|사용자가\s*익숙한\s*단어.*(?:구문|개념).*번역"
+    r"|아래\s*세부\s*정보.*번역"
+    r"|번역할\s*수\s*없(?:습니다|다)"
+    r"|정확한\s*번역을\s*위해"
+    r"|전체\s*문장은\s*다음과\s*같이\s*번역"
+    r"|Korean\s+translation\s*[:：]",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
+)
+_PROMPT_LABEL_RE = re.compile(
+    r"(^|\n|\s)(?:원문|영어|한국어|번역문)\s*[:：]",
+    re.IGNORECASE,
+)
+_PROMPT_PREAMBLE_RE = re.compile(
+    r"^\s*(?:네|예|물론입니다|물론|알겠습니다)[,.! ]*(?:제가\s*)?"
+    r"(?:번역(?:을)?\s*(?:도와|해)|한국어로\s*번역)"
+    r"|^\s*(?:아래|다음)(?:은|는)?\s*(?:요청하신\s*)?(?:한국어\s*)?번역(?:문)?"
+    r"|^\s*번역(?:문)?\s*[:：]"
+    r"|^\s*Here\s+is\s+(?:the\s+)?(?:Korean\s+)?translation"
+    r"|^\s*Here\s+are\s+(?:a\s+few|some|several)\s+"
+    r"(?:ways\s+to\s+translate|options\s+for\s+(?:the\s+)?(?:Korean\s+)?translation)\b",
+    re.IGNORECASE,
+)
 _CHAR_REPEAT_PATTERNS: dict[int, re.Pattern[str]] = {}
 _ENGLISH_SENTENCE_MARKERS = {
     "am",
@@ -105,6 +141,15 @@ def _token_overlap(source: str, mt: str) -> float:
     if not src_tokens:
         return 0.0
     return len(src_tokens & mt_tokens) / len(src_tokens)
+
+
+def _mt_token_source_precision(source: str, mt: str) -> float:
+    src_tokens = {token.lower() for token in _WORD_RE.findall(source) if len(token) >= 3}
+    mt_tokens = [token.lower() for token in _WORD_RE.findall(mt) if len(token) >= 3]
+    if not src_tokens or not mt_tokens:
+        return 0.0
+    copied = sum(1 for token in mt_tokens if token in src_tokens)
+    return copied / len(mt_tokens)
 
 
 def _has_english_sentence_marker(text: str) -> bool:
@@ -528,6 +573,32 @@ def _has_dangling_korean_suffix(source: str, text: str, config: Mapping[str, Any
     return any(stripped.endswith(str(particle)) for particle in particles)
 
 
+def _prompt_artifact_flags(
+    *,
+    text: str,
+    hangul_ratio: float,
+    latin_like_ratio: float,
+    config: Mapping[str, Any],
+) -> list[str]:
+    artifact_cfg = _nested_config(config, "prompt_artifact")
+    flags: list[str] = []
+    if bool(_PROMPT_ARTIFACT_RE.search(text)):
+        flags.append("prompt_artifact_instruction")
+    if bool(_PROMPT_LABEL_RE.search(text)):
+        label_cfg = _nested_config(artifact_cfg, "labels")
+        if (
+            len(text) >= _cfg_int(label_cfg, "min_text_chars", 8)
+            and (
+                latin_like_ratio >= _cfg_float(label_cfg, "latin_like_ratio_min", 0.20)
+                or hangul_ratio <= _cfg_float(label_cfg, "hangul_ratio_max", 0.45)
+            )
+        ):
+            flags.append("prompt_artifact_label")
+    if bool(_PROMPT_PREAMBLE_RE.search(text)):
+        flags.append("prompt_artifact_preamble")
+    return flags
+
+
 def classify_student_output(
     *,
     source: str,
@@ -554,6 +625,16 @@ def classify_student_output(
         flags.append("encoding_replchar")
     if _cfg_bool(config, "reject_thinking_trace", True) and _THINKING_TRACE_RE.search(text):
         flags.append("thinking_trace")
+    if _cfg_bool(config, "reject_prompt_artifact", True):
+        artifact_flags = _prompt_artifact_flags(
+            text=text,
+            hangul_ratio=hangul_ratio,
+            latin_like_ratio=latin_like_ratio,
+            config=config,
+        )
+        if artifact_flags:
+            flags.append("prompt_artifact")
+            flags.extend(artifact_flags)
     if _cfg_bool(config, "reject_repetition", True):
         repetition_flags = _repetition_flags(source, text, config)
         if repetition_flags:
@@ -580,6 +661,17 @@ def classify_student_output(
             hangul_ratio < _cfg_float(english_cfg, "hangul_ratio_max", 0.05)
             and latin_ratio > _cfg_float(english_cfg, "latin_ratio_min", 0.50)
             and source_overlap >= _cfg_float(english_cfg, "source_token_overlap_min", 0.55)
+        ):
+            flags.append("english_passthrough")
+        elif (
+            len(text) >= _cfg_int(english_cfg, "partial_copy_min_text_chars", 6)
+            and len(source) >= _cfg_int(english_cfg, "partial_copy_min_source_chars", 20)
+            and hangul_ratio < _cfg_float(english_cfg, "partial_copy_hangul_ratio_max", 0.05)
+            and latin_ratio > _cfg_float(english_cfg, "partial_copy_latin_ratio_min", 0.50)
+            and _mt_token_source_precision(source, text)
+            >= _cfg_float(english_cfg, "partial_copy_mt_source_precision_min", 0.80)
+            and len(_WORD_RE.findall(text)) <= _cfg_int(english_cfg, "partial_copy_max_mt_tokens", 12)
+            and len(_WORD_RE.findall(source)) >= _cfg_int(english_cfg, "partial_copy_min_source_tokens", 5)
         ):
             flags.append("english_passthrough")
         elif (
