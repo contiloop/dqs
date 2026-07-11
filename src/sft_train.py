@@ -233,8 +233,53 @@ def _load_model_and_tokenizer(cfg: Mapping[str, Any], max_seq_length: int) -> tu
         raise SystemExit("model config must be a mapping")
     if not isinstance(training_cfg, Mapping):
         raise SystemExit("training config must be a mapping")
-    if str(training_cfg.get("backend", "unsloth")).lower() != "unsloth":
-        raise SystemExit("training.backend must be unsloth; fallback training backends are disabled")
+    backend = str(training_cfg.get("backend", "unsloth")).strip().lower()
+    if backend == "hf":
+        if not bool(training_cfg.get("allow_hf_backend", False)):
+            raise SystemExit("training.backend=hf requires training.allow_hf_backend=true")
+        if str(training_cfg.get("tuning_mode", "")).lower() != "full":
+            raise SystemExit("training.backend=hf currently supports full tuning only")
+        try:
+            from transformers import AutoModelForImageTextToText, AutoTokenizer
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise SystemExit("Transformers with Gemma 4 support is required for training.backend=hf") from exc
+
+        dtype = _torch_dtype(training_cfg.get("dtype", "auto"))
+        load_kwargs: dict[str, Any] = {
+            "pretrained_model_name_or_path": str(model_cfg["name_or_path"]),
+            "dtype": dtype if dtype is not None else "auto",
+            "trust_remote_code": bool(model_cfg.get("trust_remote_code", False)),
+            "attn_implementation": str(model_cfg.get("hf_attn_implementation", "eager")),
+            "revision": str(model_cfg.get("revision", model_cfg.get("tokenizer_revision", "main"))),
+        }
+        with _unsloth_output_context():
+            model = AutoModelForImageTextToText.from_pretrained(**load_kwargs)
+            tokenizer = AutoTokenizer.from_pretrained(
+                str(model_cfg["name_or_path"]),
+                revision=str(model_cfg.get("revision", model_cfg.get("tokenizer_revision", "main"))),
+                trust_remote_code=bool(model_cfg.get("trust_remote_code", False)),
+            )
+        if training_cfg.get("gradient_checkpointing", False) not in {False, None, "false", "none", "off"}:
+            try:
+                model.gradient_checkpointing_enable(
+                    gradient_checkpointing_kwargs={"use_reentrant": False}
+                )
+            except TypeError:
+                model.gradient_checkpointing_enable()
+            for candidate in (
+                model,
+                getattr(model, "model", None),
+                getattr(getattr(model, "model", None), "language_model", None),
+            ):
+                config = getattr(candidate, "config", None)
+                if config is not None and hasattr(config, "use_cache"):
+                    config.use_cache = False
+        tokenizer_backend = text_tokenizer(tokenizer)
+        if getattr(tokenizer_backend, "pad_token", None) is None and getattr(tokenizer_backend, "eos_token", None) is not None:
+            tokenizer_backend.pad_token = tokenizer_backend.eos_token
+        return model, tokenizer, None
+    if backend != "unsloth":
+        raise SystemExit(f"unsupported training.backend={backend!r}")
 
     with _unsloth_output_context():
         model_api = _resolve_model_api(cfg)
@@ -281,30 +326,35 @@ def _linear_leaf_module_short_names(model: Any) -> list[str]:
     return sorted(target_names)
 
 
-def _contains_visual_module_name(name: str) -> bool:
+def _contains_non_text_modality_module_name(name: str) -> bool:
     parts = name.split(".")
-    return "visual" in parts or name.startswith("vision_")
+    return any(
+        part == "visual"
+        or "vision" in part
+        or "audio" in part
+        for part in parts
+    )
 
 
-def _ensure_no_visual_trainable_parameters(model: Any) -> None:
-    visual_trainable = []
+def _ensure_no_non_text_trainable_parameters(model: Any) -> None:
+    non_text_trainable = []
     for name, parameter in model.named_parameters():
-        if getattr(parameter, "requires_grad", False) and _contains_visual_module_name(name):
-            visual_trainable.append(name)
-    if visual_trainable:
-        preview = ", ".join(visual_trainable[:8])
-        suffix = "" if len(visual_trainable) <= 8 else f", ... (+{len(visual_trainable) - 8} more)"
+        if getattr(parameter, "requires_grad", False) and _contains_non_text_modality_module_name(name):
+            non_text_trainable.append(name)
+    if non_text_trainable:
+        preview = ", ".join(non_text_trainable[:8])
+        suffix = "" if len(non_text_trainable) <= 8 else f", ... (+{len(non_text_trainable) - 8} more)"
         raise SystemExit(
-            "The model has trainable visual parameters while training.train_vision_layers=false. "
-            "Freeze visual parameters or set training.train_vision_layers=true only for multimodal training. "
+            "The model has trainable vision/audio parameters while training.train_vision_layers=false. "
+            "Freeze non-text parameters or enable modality training only for multimodal data. "
             f"Examples: {preview}{suffix}"
         )
 
 
-def _freeze_visual_parameters(model: Any) -> int:
+def _freeze_non_text_parameters(model: Any) -> int:
     frozen = 0
     for name, parameter in model.named_parameters():
-        if _contains_visual_module_name(name):
+        if _contains_non_text_modality_module_name(name):
             parameter.requires_grad_(False)
             frozen += 1
     return frozen
@@ -332,8 +382,8 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
         for parameter in model.parameters():
             parameter.requires_grad_(True)
         if not bool(training_cfg.get("train_vision_layers", False)):
-            _freeze_visual_parameters(model)
-            _ensure_no_visual_trainable_parameters(model)
+            _freeze_non_text_parameters(model)
+            _ensure_no_non_text_trainable_parameters(model)
         return model
     lora_cfg = training_cfg.get("lora")
     if not isinstance(lora_cfg, Mapping):
@@ -366,7 +416,7 @@ def _apply_lora_if_needed(cfg: Mapping[str, Any], model: Any, model_api: Any, au
     with _unsloth_output_context():
         model = _call_with_supported_kwargs(model_api.get_peft_model, peft_kwargs)
     if not bool(training_cfg.get("train_vision_layers", False)):
-        _ensure_no_visual_trainable_parameters(model)
+        _ensure_no_non_text_trainable_parameters(model)
     _write_lora_target_audit(audit_dir / "lora_target_modules.json", model, target_modules)
     return model
 
@@ -927,6 +977,7 @@ def run_sft_training(
     max_observed_length = max(len(row["input_ids"]) for row in tokenized_rows)
     summary: dict[str, Any] = {
         "run_id": _get(cfg, "run.id"),
+        "training_backend": _get(cfg, "training.backend", "unsloth"),
         "subset_idx": subset_idx,
         "sft_dataset_path": str(dataset_path_obj),
         "sft_rows": len(tokenized_rows),

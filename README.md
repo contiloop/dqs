@@ -120,10 +120,20 @@ PY
 ```
 
 Run the max-context SFT smoke to check training VRAM. This uses rows near the
-configured `training.max_seq_length` and runs one SFT step by default:
+configured `training.max_seq_length` and runs two SFT steps by default, so DDP
+reducer failures that surface only at the next iteration are covered:
 
 ```sh
 make smoke-sft-max-context
+```
+
+For a native Transformers comparison using the same tokenizer, tokenized rows,
+completion-only labels, DDP layout, and two-step smoke (without Unsloth):
+
+```sh
+make smoke-sft-max-context-hf \
+  SFT_NPROC_PER_NODE=4 \
+  SMOKE_OVERRIDES='model=gemma4_e2b_it training=full training.dataloader_num_workers=0'
 ```
 
 Run the small end-to-end cycle smoke. This uses two 4-row subsets and exercises

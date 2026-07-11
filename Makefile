@@ -118,8 +118,10 @@ SMOKE_CYCLE_SUBSET_SIZE ?= 4
 SMOKE_CYCLE_SUBSETS ?= 2
 SMOKE_VAL_ROWS ?= 4
 SMOKE_SFT_OUTPUT_DIR ?= artifacts/smoke/max_context_sft
+SMOKE_HF_SFT_OUTPUT_DIR ?= artifacts/smoke/max_context_sft_hf
 SMOKE_SFT_DRY_RUN ?= 0
-SMOKE_SFT_OVERRIDES ?= run.id=smoke_max_context logging.wandb.enabled=false training.gradient_accumulation_steps=1 training.max_steps=1 training.save_strategy=no training.save_final_model=false training.save_full_model=false training.save_merged_model=false training.merge_smoke_test_required=false
+SMOKE_SFT_OVERRIDES ?= run.id=smoke_max_context logging.wandb.enabled=false training.gradient_accumulation_steps=1 training.max_steps=2 training.save_strategy=no training.save_final_model=false training.save_full_model=false training.save_merged_model=false training.merge_smoke_test_required=false
+SMOKE_HF_SFT_OVERRIDES ?= training.backend=hf training.allow_hf_backend=true
 SMOKE_CYCLE_DRY_RUN ?= 0
 SMOKE_CYCLE_EVAL_DRY_RUN ?= 0
 SMOKE_CYCLE_OVERRIDES ?= run.id=smoke_cycle logging.wandb.enabled=false data.teacher_target_per_subset=2 teacher.candidate_multiplier=2 training.gradient_accumulation_steps=1 training.save_strategy=no training.save_merged_model=false training.merge_smoke_test_required=false
@@ -169,7 +171,7 @@ FLASH_ATTN_WHL_SM80 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm80-$(PYTHON_TAG)-
 FLASH_ATTN_WHL_SM120 ?= flash_attn-$(PIN_FLASH_ATTN_VERSION)-1sm120-$(PYTHON_TAG)-$(PYTHON_TAG)-linux_x86_64.whl
 FLASH_ATTN_GPU_ARCH ?= auto
 
-.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run full-sft-from-run repair-qwen35-checkpoint sft smoke-data smoke-sft-max-context smoke-cycle verify-cuda-kernels
+.PHONY: set set-metricx validate-setup download-prepared-data preprocess-raw train train-stage eval eval-matrix eval-checkpoints upload-run compact-run full-sft-from-run repair-qwen35-checkpoint sft smoke-data smoke-sft-max-context smoke-sft-max-context-hf smoke-cycle verify-cuda-kernels
 
 # Target: set
 # required config keys: none
@@ -400,6 +402,16 @@ smoke-sft-max-context: smoke-data
 		SFT_DRY_RUN="$(SMOKE_SFT_DRY_RUN)" \
 		SFT_NPROC_PER_NODE="$(SFT_NPROC_PER_NODE)" \
 		SFT_OVERRIDES='$(SMOKE_OVERRIDES) $(SMOKE_SFT_OVERRIDES)'
+
+smoke-sft-max-context-hf: smoke-data
+	@$(MAKE) sft \
+		SFT_CONFIG="$(SMOKE_CONFIG)" \
+		SFT_SUBSET_IDX=0 \
+		SFT_DATASET_PATH="$(SMOKE_OUTPUT_DIR)/max_context_sft.jsonl" \
+		SFT_OUTPUT_DIR="$(SMOKE_HF_SFT_OUTPUT_DIR)" \
+		SFT_DRY_RUN="$(SMOKE_SFT_DRY_RUN)" \
+		SFT_NPROC_PER_NODE="$(SFT_NPROC_PER_NODE)" \
+		SFT_OVERRIDES='$(SMOKE_OVERRIDES) $(SMOKE_SFT_OVERRIDES) $(SMOKE_HF_SFT_OVERRIDES)'
 
 smoke-cycle: smoke-data
 	@$(MAKE) train-stage \
