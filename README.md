@@ -227,6 +227,12 @@ Run a student-filter ablation:
 make train TRAIN_OVERRIDES='data.degeneration_filter.student_enabled=false'
 ```
 
+For staged training, subset 000 student inference uses the configured base
+model. Later subsets use the previous completed SFT artifact: the previous
+adapter checkpoint for LoRA and the previous full-model checkpoint for full
+tuning. Missing, incomplete, or unloadable previous checkpoints stop the run;
+the pipeline does not silently fall back to the base model.
+
 The run id includes `sf_on` or `sf_off`, so filter ablation artifacts are
 written to separate run directories automatically.
 

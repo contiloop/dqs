@@ -399,21 +399,56 @@ def _is_lora_adapter_path(path: Path) -> bool:
     )
 
 
-def _previous_subset_lora_adapter_path(cfg: Mapping[str, Any], subset_idx: int) -> Path | None:
-    if str(_get(cfg, "training.tuning_mode", "")).strip().lower() != "lora":
-        return None
+def _is_full_model_checkpoint_path(path: Path) -> bool:
+    if not path.is_dir() or not (path / "config.json").is_file():
+        return False
+    return any(
+        (path / name).is_file()
+        for name in (
+            "model.safetensors",
+            "model.safetensors.index.json",
+            "pytorch_model.bin",
+            "pytorch_model.bin.index.json",
+        )
+    )
+
+
+def _is_full_inference_model_path(path: Path) -> bool:
+    if not _is_full_model_checkpoint_path(path):
+        return False
+    return any(
+        (path / name).is_file()
+        for name in (
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "tokenizer.model",
+            "spiece.model",
+        )
+    )
+
+
+def _previous_subset_stage_state(cfg: Mapping[str, Any], subset_idx: int) -> tuple[int, dict[str, Any]] | None:
     run_subset_start = int(_get(cfg, "run.subset_start", 0) or 0)
     if subset_idx <= run_subset_start:
         return None
-
     previous_subset_idx = subset_idx - 1
     state_path = _checkpoint_dir(cfg) / f"sft_stage_state_subset_{previous_subset_idx:03d}.json"
     state = _require_json(state_path, f"sft_stage_state_subset_{previous_subset_idx:03d}.json")
     if state.get("status") != "completed":
         raise SystemExit(
-            f"cannot run subset_{subset_idx:03d} student inference with LoRA: "
+            f"cannot run subset_{subset_idx:03d} student inference: "
             f"previous subset_{previous_subset_idx:03d} SFT is not completed"
         )
+    return previous_subset_idx, state
+
+
+def _previous_subset_lora_adapter_path(cfg: Mapping[str, Any], subset_idx: int) -> Path | None:
+    if str(_get(cfg, "training.tuning_mode", "")).strip().lower() != "lora":
+        return None
+    previous = _previous_subset_stage_state(cfg, subset_idx)
+    if previous is None:
+        return None
+    previous_subset_idx, state = previous
     checkpoint_dir = Path(str(state.get("checkpoint_dir", "")))
     if not _is_lora_adapter_path(checkpoint_dir):
         raise SystemExit(
@@ -423,9 +458,55 @@ def _previous_subset_lora_adapter_path(cfg: Mapping[str, Any], subset_idx: int) 
     return checkpoint_dir
 
 
+def _previous_subset_full_inference_model(
+    cfg: Mapping[str, Any],
+    subset_idx: int,
+) -> tuple[Path, int, int] | None:
+    if str(_get(cfg, "training.tuning_mode", "")).strip().lower() != "full":
+        return None
+    previous = _previous_subset_stage_state(cfg, subset_idx)
+    if previous is None:
+        return None
+    previous_subset_idx, state = previous
+    checkpoint_dir = Path(str(state.get("checkpoint_dir", "")))
+    if not _is_full_model_checkpoint_path(checkpoint_dir):
+        raise SystemExit(
+            f"cannot run subset_{subset_idx:03d} student inference with full tuning: "
+            f"previous subset_{previous_subset_idx:03d} optimizer checkpoint is not a full model: "
+            f"{checkpoint_dir}"
+        )
+    final_dir = _checkpoint_dir(cfg) / "final"
+    if not _is_full_inference_model_path(final_dir):
+        raise SystemExit(
+            f"cannot run subset_{subset_idx:03d} student inference with full tuning: "
+            f"previous subset_{previous_subset_idx:03d} final model is not loadable: {final_dir}"
+        )
+    marker_path = final_dir / "dqs_stage_model.json"
+    marker = _require_json(marker_path, "dqs_stage_model.json")
+    marker_subset_idx = marker.get("subset_idx")
+    marker_global_step = marker.get("global_step")
+    state_global_step = state.get("actual_global_step")
+    if marker_subset_idx != previous_subset_idx or marker_global_step != state_global_step:
+        raise SystemExit(
+            f"cannot run subset_{subset_idx:03d} student inference with full tuning: "
+            f"final model marker does not match previous subset state; "
+            f"expected_subset={previous_subset_idx} actual_subset={marker_subset_idx} "
+            f"expected_step={state_global_step} actual_step={marker_global_step}"
+        )
+    return final_dir, previous_subset_idx, int(marker_global_step)
+
+
 def _student_inference_model_cfg(cfg: Mapping[str, Any], subset_idx: int) -> dict[str, Any]:
     model_cfg = _get(cfg, "model", {})
     out = dict(model_cfg) if isinstance(model_cfg, Mapping) else {}
+    full_inference_model = _previous_subset_full_inference_model(cfg, subset_idx)
+    if full_inference_model is not None:
+        full_model_path, checkpoint_subset_idx, checkpoint_global_step = full_inference_model
+        out["name_or_path"] = str(full_model_path)
+        out.pop("lora_adapter_path", None)
+        out["dqs_checkpoint_subset_idx"] = checkpoint_subset_idx
+        out["dqs_checkpoint_global_step"] = checkpoint_global_step
+        return out
     adapter_path = _previous_subset_lora_adapter_path(cfg, subset_idx)
     if adapter_path is not None:
         out["lora_adapter_path"] = str(adapter_path)
@@ -443,6 +524,8 @@ def _student_request_model_error(
     expected = _student_inference_model_cfg(cfg, subset_idx)
     expected_model = str(expected.get("name_or_path", ""))
     expected_adapter = str(expected.get("lora_adapter_path", "") or "")
+    expected_checkpoint_subset = expected.get("dqs_checkpoint_subset_idx")
+    expected_checkpoint_step = expected.get("dqs_checkpoint_global_step")
     for idx, request in enumerate(requests):
         model = request.get("model", {})
         if not isinstance(model, Mapping):
@@ -458,6 +541,16 @@ def _student_request_model_error(
             return (
                 f"student inference request {idx} LoRA adapter mismatch: "
                 f"expected={expected_adapter or '<none>'} actual={actual_adapter or '<none>'}"
+            )
+        if model.get("dqs_checkpoint_subset_idx") != expected_checkpoint_subset:
+            return (
+                f"student inference request {idx} checkpoint subset mismatch: "
+                f"expected={expected_checkpoint_subset} actual={model.get('dqs_checkpoint_subset_idx')}"
+            )
+        if model.get("dqs_checkpoint_global_step") != expected_checkpoint_step:
+            return (
+                f"student inference request {idx} checkpoint step mismatch: "
+                f"expected={expected_checkpoint_step} actual={model.get('dqs_checkpoint_global_step')}"
             )
     return None
 

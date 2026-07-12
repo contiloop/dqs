@@ -1113,6 +1113,30 @@ def run_sft_training(
     if _is_rank_zero():
         with progress_context("sft save-artifacts", subset=f"subset_{subset_idx:03d}", output_dir=output_dir_obj):
             artifacts = _save_model_artifacts(cfg, model, tokenizer, output_dir_obj)
+            if stage_plan is not None and str(_get(cfg, "training.tuning_mode", "")).strip().lower() == "full":
+                final_model_dir = artifacts.get("final_model_dir")
+                if not final_model_dir:
+                    raise SystemExit(
+                        "staged full training requires training.save_final_model=true "
+                        "so the next subset can run student inference"
+                    )
+                marker_path = Path(str(final_model_dir)) / "dqs_stage_model.json"
+                marker_path.write_text(
+                    json.dumps(
+                        {
+                            "run_id": str(_get(cfg, "run.id")),
+                            "subset_idx": subset_idx,
+                            "global_step": int(getattr(trainer.state, "global_step", 0)),
+                            "tuning_mode": "full",
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                artifacts["stage_model_marker"] = str(marker_path)
     _distributed_barrier()
     summary.update(
         {
