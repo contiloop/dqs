@@ -15,8 +15,8 @@ defaults:
 version: 1
 
 # Full-parameter low-QE ablation: keep only basic status/empty-output validity
-# checks before QE, then let the teacher recover any translatable SOURCE even
-# when DRAFT contains instruction-following failures or prompt artifacts.
+# checks before QE. Keep the standard strict teacher policy so the experiment
+# changes only the student degeneration filter.
 run:
   id: ${model.family}_${model.size}_${model.variant}_${training.tuning_mode}_lowqe_wo_filter_seed${run.seed}
 
@@ -30,4 +30,4 @@ data:
     teacher_enabled: true
 
 teacher:
-  draft_format_policy_path: prompts/teacher_draft_policy_recover.txt
+  draft_format_policy_path: prompts/teacher_draft_policy_strict.txt

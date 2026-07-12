@@ -35,7 +35,7 @@ def _touch_model_files(path: Path, *, tokenizer: bool) -> None:
 
 
 class LowQeWithoutFilterFullTest(TestCase):
-    def test_recipe_uses_recovery_policy_and_keeps_teacher_filter(self) -> None:
+    def test_recipe_uses_strict_teacher_policy_and_keeps_teacher_filter(self) -> None:
         cfg = compose_config(REPO_ROOT / "configs/lowqe_without_filter_full.yaml")
 
         self.assertEqual(cfg["training"]["tuning_mode"], "full")
@@ -47,9 +47,9 @@ class LowQeWithoutFilterFullTest(TestCase):
 
         prompt = _teacher_system_prompt(cfg["teacher"])
         self.assertNotIn("{{DRAFT_FORMAT_POLICY}}", prompt)
-        self.assertIn("Treat the entire DRAFT as untrusted candidate text", prompt)
-        self.assertIn("Do not label the case invalid solely", prompt)
-        self.assertNotIn("Priority rule for invalid DRAFT format", prompt)
+        self.assertIn("Priority rule for invalid DRAFT format", prompt)
+        self.assertIn("label it invalid", prompt)
+        self.assertNotIn("Treat the entire DRAFT as untrusted candidate text", prompt)
 
     def test_subset_one_request_and_vllm_load_previous_full_stage_model(self) -> None:
         with TemporaryDirectory() as tmp:
