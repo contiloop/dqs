@@ -566,8 +566,14 @@ def _call_gemini(
     }
     started = time.perf_counter()
     last_error = ""
+    last_status: int | None = None
     for attempt in range(5):
-        response = requests.post(url, json=payload, timeout=180)
+        try:
+            response = requests.post(url, json=payload, timeout=(30, 180))
+        except requests.exceptions.RequestException as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+            raise RuntimeError(f"Gemini API network error: {last_error}") from exc
+        last_status = int(response.status_code)
         if response.status_code < 300:
             data = response.json()
             chunks: list[str] = []
@@ -585,7 +591,7 @@ def _call_gemini(
         if response.status_code not in {429, 500, 502, 503, 504}:
             break
         time.sleep(min(2 ** attempt, 30))
-    raise RuntimeError(f"Gemini API error {response.status_code}: {last_error}")
+    raise RuntimeError(f"Gemini API error {last_status}: {last_error}")
 
 
 def _call_provider(
