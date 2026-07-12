@@ -238,10 +238,9 @@ make train-stage \
 ```
 
 This recipe still rejects failed or empty student generations, but does not
-remove instruction-following failures before low-QE selection. It retains the
-standard strict teacher policy, so DRAFTs containing explanations, multiple
-options, or other unrequested text are rejected as invalid. The teacher output
-degeneration filter also remains enabled.
+remove instruction-following failures before low-QE selection. Its teacher
+policy treats DRAFT as untrusted data and re-translates any valid SOURCE from
+scratch. The teacher output degeneration filter remains enabled.
 
 For staged training, subset 000 student inference uses the configured base
 model. Later subsets use the previous completed SFT artifact: the previous
