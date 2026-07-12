@@ -1715,6 +1715,7 @@ def _student_records(
                     "prompt_template_group": row.get("prompt_template_group"),
                     "prompt_template_hash": row.get("prompt_template_hash"),
                     "chat_template_applied": row.get("chat_template_applied"),
+                    "model": row.get("model", {}),
                 },
                 "filter": {
                     "filtered": filter_label != "clean",
@@ -1765,6 +1766,12 @@ def _restore_compact_front_artifacts(
         source = str(record.get("source", ""))
         translation = str(student.get("translation", ""))
         status = str(student.get("status", "failed"))
+        stored_model_cfg = student.get("model")
+        request_model_cfg = (
+            dict(stored_model_cfg)
+            if isinstance(stored_model_cfg, Mapping) and stored_model_cfg
+            else dict(model_cfg)
+        )
 
         input_row = {
             "id": row_id,
@@ -1786,7 +1793,7 @@ def _restore_compact_front_artifacts(
             "prompt_template_group": student.get("prompt_template_group"),
             "prompt_template_hash": student.get("prompt_template_hash"),
             "chat_template_applied": student.get("chat_template_applied"),
-            "model": dict(model_cfg),
+            "model": request_model_cfg,
             "inference": {},
             "decoding": {},
         }
