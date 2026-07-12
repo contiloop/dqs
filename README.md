@@ -227,6 +227,21 @@ Run a student-filter ablation:
 make train TRAIN_OVERRIDES='data.degeneration_filter.student_enabled=false'
 ```
 
+Run the full-parameter low-QE ablation without the student degeneration filter:
+
+```sh
+make train-stage \
+  TRAIN_CONFIG=configs/lowqe_without_filter_full.yaml \
+  SFT_NPROC_PER_NODE=4 \
+  EVAL_EVERY_N_SUBSETS=0 \
+  TRAIN_OVERRIDES='inference.num_gpus=4 inference.tensor_parallel_size=1 inference.gpu_ids=[0,1,2,3] qe.selection.num_gpus=4 qe.selection.gpu_ids=[0,1,2,3]'
+```
+
+This recipe still rejects failed or empty student generations, but does not
+remove instruction-following failures before low-QE selection. Its teacher
+policy treats DRAFT as untrusted data and re-translates any valid SOURCE from
+scratch. The teacher output degeneration filter remains enabled.
+
 For staged training, subset 000 student inference uses the configured base
 model. Later subsets use the previous completed SFT artifact: the previous
 adapter checkpoint for LoRA and the previous full-model checkpoint for full

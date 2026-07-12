@@ -1,0 +1,33 @@
+defaults:
+  - run
+  - paths
+  - data
+  - model: qwen35_4b_it
+  - prompts
+  - inference
+  - qe
+  - eval: val
+  - teacher
+  - training: full
+  - logging
+  - _self_
+
+version: 1
+
+# Full-parameter low-QE ablation: keep only basic status/empty-output validity
+# checks before QE, then let the teacher recover any translatable SOURCE even
+# when DRAFT contains instruction-following failures or prompt artifacts.
+run:
+  id: ${model.family}_${model.size}_${model.variant}_${training.tuning_mode}_lowqe_wo_filter_seed${run.seed}
+
+data:
+  qe_selection_order: low
+  raw_random_baseline: false
+  degeneration_filter:
+    enabled: true
+    student_enabled: false
+    student_require_valid_output: true
+    teacher_enabled: true
+
+teacher:
+  draft_format_policy_path: prompts/teacher_draft_policy_recover.txt

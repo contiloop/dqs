@@ -84,6 +84,23 @@ def _read_text(path: str | Path) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
+def _teacher_system_prompt(teacher_cfg: Mapping[str, Any]) -> str:
+    system_prompt = _read_text(str(teacher_cfg.get("system_prompt_path", "prompts/teacher_system.txt")))
+    marker = "{{DRAFT_FORMAT_POLICY}}"
+    if marker not in system_prompt:
+        return system_prompt
+    policy_path = str(teacher_cfg.get("draft_format_policy_path", "")).strip()
+    if not policy_path:
+        raise SystemExit(
+            "teacher system prompt contains {{DRAFT_FORMAT_POLICY}} but "
+            "teacher.draft_format_policy_path is empty"
+        )
+    policy = _read_text(policy_path).strip()
+    if not policy:
+        raise SystemExit(f"teacher draft-format policy is empty: {policy_path}")
+    return system_prompt.replace(marker, policy)
+
+
 def _load_translation_tokenizer(cfg: Mapping[str, Any]) -> Any:
     try:
         from transformers import AutoTokenizer
@@ -891,7 +908,7 @@ def run_teacher_generation(
     refill_until_target = bool(teacher_cfg.get("refill_until_target", True))
     abort_on_all_failed_window = bool(teacher_cfg.get("abort_on_all_failed_window", True))
 
-    system_prompt = _read_text(str(teacher_cfg.get("system_prompt_path", "prompts/teacher_system.txt")))
+    system_prompt = _teacher_system_prompt(teacher_cfg)
     user_template = _read_text(str(teacher_cfg.get("user_prompt_path", "prompts/teacher_user_batch.txt")))
     providers = _enabled_providers(cfg)
     seed = int(_get(cfg, "run.seed", 42) or 42)
@@ -1129,6 +1146,7 @@ def run_teacher_generation(
         "teacher_degeneration_filter_enabled": teacher_filter_enabled,
         "teacher_reject_over_max_output_tokens": reject_over_max_output_tokens,
         "teacher_target_max_output_tokens": target_max_output_tokens,
+        "teacher_draft_format_policy_path": teacher_cfg.get("draft_format_policy_path"),
     }
     (subset_dir / "teacher_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n",

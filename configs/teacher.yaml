@@ -13,6 +13,7 @@ teacher:
   invalid_label: invalid
   prompt_path: prompts/teacher_template.txt
   system_prompt_path: prompts/teacher_system.txt
+  draft_format_policy_path: prompts/teacher_draft_policy_strict.txt
   user_prompt_path: prompts/teacher_user_batch.txt
   allow_fallback: false
   providers:
