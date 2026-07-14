@@ -1,5 +1,5 @@
 {
-  "bundle_content_sha256": "91ae3b526c1d51232f45542869a4595d13eaa482a68c1a14d71b2d183db2a280",
+  "bundle_content_sha256": "55c341a902ae32f4a3426d3bb7b4206bee16b1aaefe4f0738f7ae762be28b441",
   "bundle_name": "dqs_preference_training",
   "data_access": "explicit_download_then_local",
   "data_mode": "hf",
@@ -20,7 +20,7 @@
     "configs/dpo.yaml": "5825b1ea640c833b71340f1142c555f1bec2590aae0d2f4cbd62b915fe557932",
     "configs/mpo.yaml": "8a2c8c27c2f53694d42959e2d49a95f4241c9b1a0f8461c327713569d7c9caf5",
     "configs/mpo_constant.yaml": "494e89a39022bdf8c65cd0aaf77919a7586578dbfd5eed046b57eb9db3d643ae",
-    "configs/mpo_constant_lambda5.yaml": "a83b15c68128c9b1afbae2c5c4a24fcd5968e1bf9c265c7f7a222e7ab08c4b7b",
+    "configs/mpo_constant_lambda5.yaml": "b6c611201ee6eb33bdf0a0f8629748686724c3df1c528470ab9f57fca420091e",
     "data/contracts/cpo.json": "39bd94cf7a5b484a5d66848f63caa24c68f77e08994b45def981c73491637084",
     "data/contracts/dpo.json": "5a2d382745fecebe9397fd499c7d073c7f22f5991f8a9ea7fcec8d1b46231f25",
     "data/contracts/mpo.json": "a2e775e86631e1608f4efdacc1e1e84e4302cbdcebd379c804fca79da9f995be",
@@ -46,7 +46,7 @@
     "src/train_mpo.py": "1b2056242ec41c29df1b43a4a636bc789bb2592ff85fad3d5f91c31f79ed2547",
     "tests/test_download_data.py": "b61b9df115671e510735beb71487ea4ce3db582b04036a39922152ee63752503",
     "tests/test_download_model.py": "ab3a9fc779d6c73af864d5ac44e35576f53d359721804be5afcde216340c66e7",
-    "tests/test_release_contract.py": "b965c3793ad009bae20d92612b26f05ecfd0245c519e506964503bd87b3a14cd"
+    "tests/test_release_contract.py": "845dee57f40f9da3ac0caee08a9424815a9f433d4b0e901804bc2591757b37b1"
   },
   "generated_at_utc": "2026-07-14T16:21:04+00:00",
   "generator": "post_training/scripts/build_release.py",
