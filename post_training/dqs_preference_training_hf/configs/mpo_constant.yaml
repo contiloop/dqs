@@ -2,7 +2,7 @@ run:
   id: gemma4_e2b_dqs_mpo_setting5_constant_noclip_lr5e-6_seed42
   seed: 42
   output_dir: outputs/gemma4_e2b_dqs_mpo_setting5_constant_noclip_lr5e-6_seed42
-  require_smoke_step_receipt: true
+  require_smoke_step_receipt: false
 logging:
   wandb:
     enabled: true

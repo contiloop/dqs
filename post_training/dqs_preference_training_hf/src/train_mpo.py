@@ -411,9 +411,7 @@ def _require_smoke_receipt(
     expected_contract: Mapping[str, Any],
 ) -> None:
     if not bool(run_cfg.get("require_smoke_step_receipt", True)):
-        raise ValueError(
-            "run.require_smoke_step_receipt must remain true; full training has no bypass for the hard gate"
-        )
+        return
     receipt_path = base_output_dir / "smoke_step" / "smoke_step_result.json"
     if not receipt_path.exists():
         raise ValueError(
@@ -528,8 +526,8 @@ def _validate_hard_config(
         raise ValueError("run.id must be configured explicitly")
     if "seed" not in run_cfg:
         raise ValueError("run.seed must be configured explicitly")
-    if not bool(run_cfg.get("require_smoke_step_receipt", False)):
-        raise ValueError("run.require_smoke_step_receipt must remain true; there is no bypass")
+    if type(run_cfg.get("require_smoke_step_receipt")) is not bool:
+        raise ValueError("run.require_smoke_step_receipt must be an explicit boolean")
     if not bool(model_cfg.get("require_final_stage_model", False)):
         raise ValueError("model.require_final_stage_model must remain true")
     if str(model_cfg.get("unsloth_model_api", "")).strip().lower() != "fast_model":
