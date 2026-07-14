@@ -43,7 +43,7 @@
     "tests/test_download_data.py": "b61b9df115671e510735beb71487ea4ce3db582b04036a39922152ee63752503",
     "tests/test_release_contract.py": "1a4d50e012450f92ba97ca760fc6e46418c7de23c330d0be4c7e8ff07c46d428"
   },
-  "generated_at_utc": "2026-07-14T11:38:26.591310+00:00",
+  "generated_at_utc": "2026-07-14T11:40:48.901852+00:00",
   "generator": "post_training/scripts/build_release.py",
   "hf_dataset": {
     "repo_id": "alwaysgood/dqs-post-training",
@@ -110,6 +110,6 @@
   },
   "runtime_requirements": "requirements-gpu.txt",
   "schema_version": "dqs_preference_release.v1",
-  "source_git_commit": "1dda9fec6e639b3157ca2bad1ff3d9d894bc19af",
-  "source_post_training_dirty": true
+  "source_git_commit": "e3f5a5768cf05154bc27f1ac98a848fd3af84fc6",
+  "source_post_training_dirty": false
 }
