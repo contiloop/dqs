@@ -12,7 +12,7 @@ python3 post_training/scripts/build_release.py \
   --output post_training/dist/dqs_preference_training_hf \
   --data-mode hf \
   --hf-repo-id alwaysgood/dqs-post-training \
-  --hf-revision 33899900bbb516b5684c09d2e3fa71a192437f35 \
+  --hf-revision 0f7b051f96b3ccdc3837f9537e5aac3a776bf4f1 \
   --replace \
   --archive
 ```
@@ -179,6 +179,13 @@ resume checkpoint restore 전에 원래 SFT policy의 completion log-prob 합을
 `UnslothDPOTrainer`/`UnslothDPOConfig`로 패치됐는지 확인하며, full Gemma4 Processor,
 text-only all-zero `mm_token_type_ids`, completion EOS, no-truncation, `logits_to_keep` 실제
 반영을 모두 hard assertion한다. pristine TRL trainer나 bare tokenizer로 돌아가는 경로는 없다.
+
+SFT final 저장본의 tokenizer는 completion EOS가 `<turn|>`(id 106)이다. 최초 데이터
+token mask는 동일한 vocabulary/backend의 base tokenizer EOS id 1로 만들어졌으므로,
+release 직전에 `post_training/scripts/retarget_preference_eos.py`로 mPO/CPO 양쪽의 마지막
+appended EOS만 106으로 바꿨다. 5,200행의 본문 token, sequence length, completion/term mask는
+전부 그대로이며 DPO raw text는 byte-for-byte 그대로다. 세 contract는 exact SFT final
+tokenizer config SHA256과 EOS 106을 묶고, 런타임에서 id 1로 되돌리는 fallback은 없다.
 
 아래는 원천 데이터부터 전부 다시 합성할 때만 쓰는 재생성 절차다. 삭제된 raw source와
 tokenizer cache를 먼저 복원해야 하며, 생성되는 `prepared/`와 중간 analysis 파일은
@@ -445,7 +452,7 @@ data_mode: hf
 data_access: explicit_download_then_local
 hf_dataset:
   repo_id: alwaysgood/dqs-post-training
-  revision: 33899900bbb516b5684c09d2e3fa71a192437f35
+  revision: 0f7b051f96b3ccdc3837f9537e5aac3a776bf4f1
 ```
 
 | objective | train file | contract |

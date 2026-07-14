@@ -1,10 +1,11 @@
 {
-  "artifact_sha256": "a85d052985e87316b3086acc1903ac0f74958a935094146a59a1e047ef8bb287",
+  "artifact_sha256": "a7b7af39b1003619ac6788f18fdfb85e4e0fe76c06ecc8d760f47c8bfe0f339d",
   "base_mapping_builder_source_sha256": "45a48019a0e87c0748593c1f350e8a55d84981438a10271f22d7036f03be3f4b",
   "base_tokenizer_contract_sha256": "d5e759cc1a5a93bfd545632cc72808347abfb5de42ce41adddc226f3a9d8e525",
   "causal_shift": "mask[:, 1:] aligns with logits[:, :-1]",
   "chosen_rejected_masks": "independent_offset_alignment",
-  "eos_token_id": 1,
+  "eos_token": "<turn|>",
+  "eos_token_id": 106,
   "filtered_candidates_sha256": "7204050100a47764e2a99aebd1b70729c45b7ead401c3cdcb0c7bafbc1ed32eb",
   "finalization_policy": "direct_review_93_fail_closed_v1",
   "finalizer_source_sha256": "bef4006801c55a061610afe93865b5918fa9cf79cb332829fb9de462c000ec41",
@@ -25,6 +26,34 @@
   "parent_artifact_sha256": "e5512852a8db36597ef9cf5e080d745b57c25650a65dcb3a225d0a6ecfa1f463",
   "parent_contract_path": "source://post_training/dataset_contract_strict_v2.json",
   "parent_contract_sha256": "4a54c9688cb08c677f9bb2e95c167e64e08e06afe4bc2e2723b9773e05c9bda0",
+  "post_sft_tokenizer_alignment": {
+    "artifact_change_scope": "final appended completion token on chosen and rejected sides",
+    "final_sft_tokenizer": {
+      "backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
+      "eos_token": "<turn|>",
+      "eos_token_id": 106,
+      "global_step": 184,
+      "pad_token_id": 0,
+      "repo_id": "alwaysgood/dqs-runs",
+      "repo_type": "dataset",
+      "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+      "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+      "subfolder": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+      "subset_idx": 22,
+      "tokenizer_config_sha256": "de3cba60561eb2ee6362e34274bb7196b87d8febf01d54a2356a1b1f5a14284b",
+      "vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42"
+    },
+    "masks_unchanged": true,
+    "mode": "deterministic_appended_completion_eos_retarget_v1",
+    "non_terminator_token_ids_unchanged": true,
+    "repair_or_fallback": "none",
+    "script_sha256": "e63821c9f128846342780be3763b32bdc92ff12e7d10339472cb84ab994a15ff",
+    "sequence_lengths_unchanged": true,
+    "source_eos_token": "<eos>",
+    "source_eos_token_id": 1,
+    "target_eos_token": "<turn|>",
+    "target_eos_token_id": 106
+  },
   "preference_quality_exclusion_count": 1,
   "preference_quality_rejections_path": "source://post_training/analysis/preference_quality_rejections.jsonl",
   "preference_quality_rejections_sha256": "0ceaef6f0663ae91c18e1da298be8ca170350a52c0745fd7a62b1720fa584925",
@@ -60,5 +89,5 @@
   "tokenizer_requested_revision": "main",
   "tokenizer_resolved_revision": "9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf",
   "tokenizer_vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42",
-  "training_semantic_sha256": "6aacbaf3635592b400694d955aa287fe03d3a50edd7eaeb574549f0fa76f1ff2"
+  "training_semantic_sha256": "7b7d18476c75ed579067280b89406151aee78a68a2ff0033ea076461c90b5cae"
 }

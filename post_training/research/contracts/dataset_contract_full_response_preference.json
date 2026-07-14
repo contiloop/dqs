@@ -7,9 +7,9 @@
     "CPO"
   ],
   "cpo_tokenized_artifact_path": "source://post_training/prepared/cpo_tokenized_full_response_pairs_final.jsonl",
-  "cpo_tokenized_artifact_sha256": "54c96f01ac416c90d24bb2ff757c0e8db5cde7161220a639051c984acda30d2f",
+  "cpo_tokenized_artifact_sha256": "9d9c3e9738059df5f2ceed49b57bc67cc8bc5a23a5e6fa80535447165f2c5f85",
   "cpo_tokenized_contract_path": "source://post_training/dataset_contract_cpo_full_response.json",
-  "cpo_tokenized_contract_sha256": "9cfcf6d6b5ba42c6405acd5180f44c33a0cdc059c55a8480da45d032a93ef381",
+  "cpo_tokenized_contract_sha256": "39bd94cf7a5b484a5d66848f63caa24c68f77e08994b45def981c73491637084",
   "excluded_identical_response_rows": 1,
   "hard_invariants": {
     "input_order_preserved": true,
@@ -40,9 +40,10 @@
   "row_count": 5200,
   "schema_version": "dqs.full_response_preference_contract.v1",
   "source_quality_contract_path": "source://post_training/dataset_contract_final_source_filtered.json",
-  "source_quality_contract_sha256": "03037c3ccbe4e5be75176a0f2e609f842377001d2b6a051cd119b2c306059040",
+  "source_quality_contract_sha256": "a2e775e86631e1608f4efdacc1e1e84e4302cbdcebd379c804fca79da9f995be",
   "tokenization_contract": {
-    "eos_token_id": 1,
+    "eos_token": "<turn|>",
+    "eos_token_id": 106,
     "max_observed_sequence_tokens": 2825,
     "max_seq_length": 2908,
     "maxima": {
@@ -76,6 +77,34 @@
       }
     },
     "pad_token_id": 0,
+    "post_sft_tokenizer_alignment": {
+      "artifact_change_scope": "runtime tokenization contract only; raw prompt/completion text unchanged",
+      "final_sft_tokenizer": {
+        "backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
+        "eos_token": "<turn|>",
+        "eos_token_id": 106,
+        "global_step": 184,
+        "pad_token_id": 0,
+        "repo_id": "alwaysgood/dqs-runs",
+        "repo_type": "dataset",
+        "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+        "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+        "subfolder": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+        "subset_idx": 22,
+        "tokenizer_config_sha256": "de3cba60561eb2ee6362e34274bb7196b87d8febf01d54a2356a1b1f5a14284b",
+        "vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42"
+      },
+      "masks_unchanged": true,
+      "mode": "deterministic_appended_completion_eos_retarget_v1",
+      "non_terminator_token_ids_unchanged": true,
+      "repair_or_fallback": "none",
+      "script_sha256": "e63821c9f128846342780be3763b32bdc92ff12e7d10339472cb84ab994a15ff",
+      "sequence_lengths_unchanged": true,
+      "source_eos_token": "<eos>",
+      "source_eos_token_id": 1,
+      "target_eos_token": "<turn|>",
+      "target_eos_token_id": 106
+    },
     "tokenizer_backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
     "tokenizer_name": "google/gemma-4-E2B-it",
     "tokenizer_resolved_revision": "9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf",

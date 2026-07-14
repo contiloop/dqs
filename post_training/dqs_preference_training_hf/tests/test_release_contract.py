@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,9 @@ from preference_runtime import POST_TRAINING_ROOT, REPO_ROOT, _output_dir  # noq
 from train_cpo import validate_config as validate_cpo_config  # noqa: E402
 from train_dpo import validate_config as validate_dpo_config  # noqa: E402
 from train_mpo import _validate_hard_config  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "scripts"))
+from validate_bundle import validate_model_eos_profile  # noqa: E402
 
 
 class ReleaseContractTest(unittest.TestCase):
@@ -73,6 +77,64 @@ class ReleaseContractTest(unittest.TestCase):
             model["files"]["model.safetensors"]["sha256"],
             "304387c31d762065420035d711ebed0eb6e296d0ee28c8918645ed3943fdaf4e",
         )
+
+    def test_all_objectives_pin_the_final_sft_eos_profile(self) -> None:
+        manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+        model = manifest["sft_model"]
+        expected_source = {
+            "repo_id": model["repo_id"],
+            "repo_type": model["repo_type"],
+            "revision": model["revision"],
+            "subfolder": model["remote_dir"],
+            "tokenizer_config_sha256": model["files"]["tokenizer_config.json"][
+                "sha256"
+            ],
+        }
+        for objective in ("mpo", "cpo", "dpo"):
+            contract = json.loads(
+                (ROOT / f"data/contracts/{objective}.json").read_text(encoding="utf-8")
+            )
+            tokenization = (
+                contract["tokenization_contract"] if objective == "dpo" else contract
+            )
+            self.assertEqual(tokenization["eos_token"], "<turn|>")
+            self.assertEqual(tokenization["eos_token_id"], 106)
+            alignment = tokenization["post_sft_tokenizer_alignment"]
+            self.assertEqual(alignment["source_eos_token_id"], 1)
+            self.assertEqual(alignment["target_eos_token_id"], 106)
+            self.assertEqual(alignment["repair_or_fallback"], "none")
+            source = alignment["final_sft_tokenizer"]
+            self.assertEqual(
+                {key: source[key] for key in expected_source}, expected_source
+            )
+
+    def test_downloaded_model_eos_profile_is_fail_closed(self) -> None:
+        tokenizer = {
+            "eos_token": "<turn|>",
+            "added_tokens_decoder": {
+                "1": {"content": "<eos>", "special": True},
+                "106": {"content": "<turn|>", "special": True},
+            },
+        }
+        model = {"eos_token_id": 106, "text_config": {"eos_token_id": 1}}
+        generation = {"eos_token_id": [1, 106, 50]}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for filename, value in (
+                ("tokenizer_config.json", tokenizer),
+                ("config.json", model),
+                ("generation_config.json", generation),
+            ):
+                (root / filename).write_text(json.dumps(value), encoding="utf-8")
+            self.assertEqual(
+                validate_model_eos_profile(root)["tokenizer_eos_token_id"], 106
+            )
+            tokenizer["eos_token"] = "<eos>"
+            (root / "tokenizer_config.json").write_text(
+                json.dumps(tokenizer), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "EOS profile"):
+                validate_model_eos_profile(root)
 
     def test_training_configs_are_local_only_after_explicit_download(self) -> None:
         for objective in ("mpo", "cpo", "dpo"):

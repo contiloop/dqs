@@ -57,6 +57,7 @@ negative: their rejected response is the original full Student output.
 - Causal one-token shift is represented in the stored prediction indices.
 - CPO and DPO retain the original Teacher/Student responses byte-for-byte.
 - Sequence truncation is forbidden by the contracts.
+- Completion EOS is `<turn|>` (token id 106), matching the exact final SFT tokenizer; the earlier base-tokenizer EOS id 1 is forbidden.
 
 Each directory contains `train.jsonl` and `dataset_contract.json`. The contract
 pins the artifact SHA256, row count, tokenizer revision, tokenizer vocabulary
@@ -87,8 +88,8 @@ template again.
 
 | config | `train.jsonl` SHA256 |
 |---|---|
-| `mpo` | `a85d052985e87316b3086acc1903ac0f74958a935094146a59a1e047ef8bb287` |
-| `cpo` | `54c96f01ac416c90d24bb2ff757c0e8db5cde7161220a639051c984acda30d2f` |
+| `mpo` | `a7b7af39b1003619ac6788f18fdfb85e4e0fe76c06ecc8d760f47c8bfe0f339d` |
+| `cpo` | `9d9c3e9738059df5f2ceed49b57bc67cc8bc5a23a5e6fa80535447165f2c5f85` |
 | `dpo` | `4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187` |
 
 ## Provenance
@@ -98,6 +99,8 @@ template again.
 - Source dataset commit: `a58b1878988efcecc9a2644f8324bd00131864b5`
 - Tokenizer: `google/gemma-4-E2B-it`
 - Resolved tokenizer revision: `9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf`
+
+- Final SFT tokenizer: `alwaysgood/dqs-runs@a58b1878988efcecc9a2644f8324bd00131864b5`, `gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final`
 
 No license is asserted by this dataset card. Users are responsible for
 complying with the terms applicable to the source content and model/tokenizer.

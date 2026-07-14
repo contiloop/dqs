@@ -4,7 +4,7 @@ PYTHON ?= python3
 PACKAGE_DIR := dqs_preference_training_hf
 TEST_PYTHONPATH := $(abspath $(PACKAGE_DIR)/src):$(abspath research/data_prep):$(abspath research/audits):$(abspath research/evaluation)
 HF_DATASET_REPO := alwaysgood/dqs-post-training
-HF_DATASET_REVISION := 33899900bbb516b5684c09d2e3fa71a192437f35
+HF_DATASET_REVISION := 0f7b051f96b3ccdc3837f9537e5aac3a776bf4f1
 RELEASE_DIR ?= dist/dqs_preference_training_hf
 
 .PHONY: test test-runtime test-research test-release test-package build-release

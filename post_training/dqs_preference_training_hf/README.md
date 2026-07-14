@@ -135,6 +135,11 @@ make download-data DOWNLOAD_WORKERS=16
 make download-data DOWNLOAD_REPLACE=1
 ```
 
+이미 이전 release의 데이터를 `data/train/`에 받은 상태에서 Git branch를 새
+dataset revision으로 갱신했다면, 기존 파일은 새 contract와 의도적으로 맞지
+않는다. 이 경우에만 `make download-data DOWNLOAD_REPLACE=1`로 세 파일을 새 exact
+revision의 검증된 파일로 교체한다.
+
 trainer는 `data.source: local`만 허용한다. 따라서 `make download-data` 이후의
 dry-run/smoke/full train에서는 네트워크 다운로드가 일어나지 않으며 데이터가
 없으면 즉시 실패한다.
@@ -210,3 +215,8 @@ Git/배포 artifact에는 포함되지 않고 학습이 모두 끝난 뒤 삭제
 
 학습 중 다른 backend, full-logits 경로, truncation, reference-free DPO, W&B
 fallback으로 전환하는 경로는 없다. 계약이 맞지 않으면 즉시 실패한다.
+
+세 데이터 contract의 completion EOS는 최종 SFT tokenizer와 같은 `<turn|>`
+(token id 106)이다. `validate-model`은 다운로드한 tokenizer/model/generation
+config와 이 EOS profile을 함께 검사하며, base tokenizer의 EOS id 1로 자동
+변환하거나 우회하지 않는다.

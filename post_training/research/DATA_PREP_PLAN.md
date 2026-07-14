@@ -78,7 +78,11 @@ base mapping 직후, artifact에 쓰기 전에 같은 행에서 다음을 검사
 ## Gemma token mask
 
 char-span candidates는 `google/gemma-4-E2B-it` tokenizer revision
-`9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf`로 변환한다.
+`9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf`의 vocabulary/backend로 변환한다.
+최종 release에서는 같은 vocabulary/backend를 가진 실제 SFT final tokenizer의 special-token
+profile을 적용해 completion EOS를 `<turn|>`(id 106)으로 고정한다. 최초 base-tokenizer
+산출물의 `<eos>`(id 1)는 `retarget_preference_eos.py`가 전 행의 마지막 appended EOS에서만
+106으로 바꾸며, 본문 token·길이·mask는 바꾸지 않는다.
 
 - prompt와 completion을 각각 `add_special_tokens=False`로 tokenize한다.
 - completion 끝에는 EOS를 붙인다.
@@ -157,17 +161,17 @@ candidate SHA256:    fc79519ab66801247c2c3336cf818117ff02363baafce15a127a763321c
 train artifact SHA:  e5512852a8db36597ef9cf5e080d745b57c25650a65dcb3a225d0a6ecfa1f463
 semantic SHA256:     78ee0596b0f312e8369944f62d75ba16224b81b74087b8989f062e613e8132ef
 
-final mPO artifact:  a85d052985e87316b3086acc1903ac0f74958a935094146a59a1e047ef8bb287
-final mPO semantic:  6aacbaf3635592b400694d955aa287fe03d3a50edd7eaeb574549f0fa76f1ff2
+final mPO artifact:  a7b7af39b1003619ac6788f18fdfb85e4e0fe76c06ecc8d760f47c8bfe0f339d
+final mPO semantic:  7b7d18476c75ed579067280b89406151aee78a68a2ff0033ea076461c90b5cae
 full raw pair:       4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187
-CPO train artifact:  54c96f01ac416c90d24bb2ff757c0e8db5cde7161220a639051c984acda30d2f
-CPO semantic:        d03a9b2c0889e222b86bd90fe4578af2fb998f02490de9add36f065fe2a22638
+CPO train artifact:  9d9c3e9738059df5f2ceed49b57bc67cc8bc5a23a5e6fa80535447165f2c5f85
+CPO semantic:        19fc8ba480a2321db1ba2542a0525be1dfca62a7ddf0832e432d69794e6463fa
 ```
 
 ## canonical 산출물과 로컬 보존 경계
 
 최종 train JSONL은 `alwaysgood/dqs-post-training`의 exact commit
-`33899900bbb516b5684c09d2e3fa71a192437f35`에 보존한다.
+`0f7b051f96b3ccdc3837f9537e5aac3a776bf4f1`에 보존한다.
 
 | objective | Hub train file | local contract |
 |---|---|---|

@@ -1,41 +1,87 @@
 {
-  "schema_version": "dqs.post_training_hf_manifest.v1",
+  "objectives": {
+    "cpo": {
+      "artifact": "cpo/train.jsonl",
+      "artifact_sha256": "9d9c3e9738059df5f2ceed49b57bc67cc8bc5a23a5e6fa80535447165f2c5f85",
+      "contract": "cpo/dataset_contract.json",
+      "contract_sha256": "39bd94cf7a5b484a5d66848f63caa24c68f77e08994b45def981c73491637084",
+      "negative_policy": "original_full_student_response_no_synthetic_reversion",
+      "row_count": 5200
+    },
+    "dpo": {
+      "artifact": "dpo/train.jsonl",
+      "artifact_sha256": "4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187",
+      "contract": "dpo/dataset_contract.json",
+      "contract_sha256": "5a2d382745fecebe9397fd499c7d073c7f22f5991f8a9ea7fcec8d1b46231f25",
+      "negative_policy": "original_full_student_response_no_synthetic_reversion",
+      "row_count": 5200
+    },
+    "mpo": {
+      "artifact": "mpo/train.jsonl",
+      "artifact_sha256": "a7b7af39b1003619ac6788f18fdfb85e4e0fe76c06ecc8d760f47c8bfe0f339d",
+      "contract": "mpo/dataset_contract.json",
+      "contract_sha256": "a2e775e86631e1608f4efdacc1e1e84e4302cbdcebd379c804fca79da9f995be",
+      "negative_policy": "teacher_postedit_with_annotated_terms_reverted_to_student_terms",
+      "row_count": 5200
+    }
+  },
   "ordered_pair_count": 5200,
+  "post_sft_tokenizer_alignment": {
+    "artifact_change_scope": "mPO/CPO appended EOS; DPO runtime tokenization contract",
+    "final_sft_tokenizer": {
+      "backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
+      "eos_token": "<turn|>",
+      "eos_token_id": 106,
+      "global_step": 184,
+      "pad_token_id": 0,
+      "repo_id": "alwaysgood/dqs-runs",
+      "repo_type": "dataset",
+      "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+      "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+      "subfolder": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+      "subset_idx": 22,
+      "tokenizer_config_sha256": "de3cba60561eb2ee6362e34274bb7196b87d8febf01d54a2356a1b1f5a14284b",
+      "vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42"
+    },
+    "masks_unchanged": true,
+    "mode": "deterministic_appended_completion_eos_retarget_v1",
+    "non_terminator_token_ids_unchanged": true,
+    "repair_or_fallback": "none",
+    "script_sha256": "e63821c9f128846342780be3763b32bdc92ff12e7d10339472cb84ab994a15ff",
+    "sequence_lengths_unchanged": true,
+    "source_eos_token": "<eos>",
+    "source_eos_token_id": 1,
+    "target_eos_token": "<turn|>",
+    "target_eos_token_id": 106
+  },
+  "repair_or_fallback": "none",
+  "schema_version": "dqs.post_training_hf_manifest.v1",
   "source": {
     "dataset_repo": "alwaysgood/dqs-runs",
     "dataset_revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
     "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42"
   },
   "tokenizer": {
+    "eos_token": "<turn|>",
+    "eos_token_id": 106,
     "name": "google/gemma-4-E2B-it",
+    "pad_token_id": 0,
     "resolved_revision": "9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf",
+    "special_tokens_source": {
+      "backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
+      "eos_token": "<turn|>",
+      "eos_token_id": 106,
+      "global_step": 184,
+      "pad_token_id": 0,
+      "repo_id": "alwaysgood/dqs-runs",
+      "repo_type": "dataset",
+      "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+      "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+      "subfolder": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+      "subset_idx": 22,
+      "tokenizer_config_sha256": "de3cba60561eb2ee6362e34274bb7196b87d8febf01d54a2356a1b1f5a14284b",
+      "vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42"
+    },
     "vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42"
-  },
-  "objectives": {
-    "mpo": {
-      "artifact": "mpo/train.jsonl",
-      "artifact_sha256": "a85d052985e87316b3086acc1903ac0f74958a935094146a59a1e047ef8bb287",
-      "contract": "mpo/dataset_contract.json",
-      "contract_sha256": "184178b8b8f04cb6a580e1899aacc16cf4cc65d5d4c3f9e3c4489d6ea1dc8a46",
-      "row_count": 5200,
-      "negative_policy": "teacher_postedit_with_annotated_terms_reverted_to_student_terms"
-    },
-    "cpo": {
-      "artifact": "cpo/train.jsonl",
-      "artifact_sha256": "54c96f01ac416c90d24bb2ff757c0e8db5cde7161220a639051c984acda30d2f",
-      "contract": "cpo/dataset_contract.json",
-      "contract_sha256": "6b8e0f2f029d0096bf5c58ef5ff28a24008cb333f88a0d2490add945483eb01e",
-      "row_count": 5200,
-      "negative_policy": "original_full_student_response_no_synthetic_reversion"
-    },
-    "dpo": {
-      "artifact": "dpo/train.jsonl",
-      "artifact_sha256": "4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187",
-      "contract": "dpo/dataset_contract.json",
-      "contract_sha256": "e3e2e608724a29a64213f951de5ca1d1e5e777f2eb3c66be6605b005420aeb7b",
-      "row_count": 5200,
-      "negative_policy": "original_full_student_response_no_synthetic_reversion"
-    }
-  },
-  "repair_or_fallback": "none"
+  }
 }

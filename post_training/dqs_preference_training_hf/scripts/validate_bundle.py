@@ -30,6 +30,10 @@ EXPECTED_RUNTIME = {
     "unsloth-zoo": "2026.7.2",
     "wandb": "0.28.0",
 }
+EXPECTED_EOS_TOKEN = "<turn|>"
+EXPECTED_EOS_TOKEN_ID = 106
+BASE_EOS_TOKEN = "<eos>"
+BASE_EOS_TOKEN_ID = 1
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,7 +132,12 @@ def _line_count(path: Path) -> int:
 
 
 def validate_objective(
-    name: str, objective: dict[str, Any], *, data_mode: str, hf_dataset: Any
+    name: str,
+    objective: dict[str, Any],
+    *,
+    data_mode: str,
+    hf_dataset: Any,
+    sft_model: Any,
 ) -> dict[str, Any]:
     config_path = resolve_bundle_path(str(objective["config"]), field=f"{name}.config")
     contract_path = resolve_bundle_path(str(objective["contract"]), field=f"{name}.contract")
@@ -163,6 +172,56 @@ def validate_objective(
         raise ValueError(f"{name} contract row count differs from manifest")
     if contract.get("artifact_sha256") != objective.get("artifact_sha256"):
         raise ValueError(f"{name} contract artifact hash differs from manifest")
+
+    tokenization = contract.get("tokenization_contract") if name == "dpo" else contract
+    if not isinstance(tokenization, dict):
+        raise ValueError(f"{name} tokenizer contract is missing")
+    if int(tokenization.get("eos_token_id", -1)) != EXPECTED_EOS_TOKEN_ID:
+        raise ValueError(
+            f"{name} EOS id must match the final SFT tokenizer: {EXPECTED_EOS_TOKEN_ID}"
+        )
+    if tokenization.get("eos_token") != EXPECTED_EOS_TOKEN:
+        raise ValueError(f"{name} EOS token must be {EXPECTED_EOS_TOKEN!r}")
+    alignment = tokenization.get("post_sft_tokenizer_alignment")
+    if not isinstance(alignment, dict):
+        raise ValueError(f"{name} has no final-SFT tokenizer alignment receipt")
+    expected_alignment = {
+        "source_eos_token": BASE_EOS_TOKEN,
+        "source_eos_token_id": BASE_EOS_TOKEN_ID,
+        "target_eos_token": EXPECTED_EOS_TOKEN,
+        "target_eos_token_id": EXPECTED_EOS_TOKEN_ID,
+        "repair_or_fallback": "none",
+    }
+    observed_alignment = {key: alignment.get(key) for key in expected_alignment}
+    if observed_alignment != expected_alignment:
+        raise ValueError(
+            f"{name} final-SFT tokenizer alignment mismatch: "
+            f"{observed_alignment} != {expected_alignment}"
+        )
+    tokenizer_source = alignment.get("final_sft_tokenizer")
+    if not isinstance(tokenizer_source, dict) or not isinstance(sft_model, dict):
+        raise ValueError(f"{name} final-SFT tokenizer provenance is missing")
+    source_binding = {
+        "repo_id": tokenizer_source.get("repo_id"),
+        "repo_type": tokenizer_source.get("repo_type"),
+        "revision": tokenizer_source.get("revision"),
+        "subfolder": tokenizer_source.get("subfolder"),
+        "tokenizer_config_sha256": tokenizer_source.get("tokenizer_config_sha256"),
+    }
+    expected_binding = {
+        "repo_id": sft_model.get("repo_id"),
+        "repo_type": sft_model.get("repo_type"),
+        "revision": sft_model.get("revision"),
+        "subfolder": sft_model.get("remote_dir"),
+        "tokenizer_config_sha256": (
+            sft_model.get("files", {}).get("tokenizer_config.json", {}).get("sha256")
+        ),
+    }
+    if source_binding != expected_binding:
+        raise ValueError(
+            f"{name} tokenizer source is not the downloadable final SFT model: "
+            f"{source_binding} != {expected_binding}"
+        )
 
     if data_mode == "local":
         if (
@@ -214,6 +273,7 @@ def validate_objective(
         "rows": int(objective["row_count"]),
         "artifact_sha256": str(objective["artifact_sha256"]),
         "config": objective["config"],
+        "eos_token_id": int(tokenization["eos_token_id"]),
     }
 
 
@@ -245,11 +305,48 @@ def validate_runtime() -> dict[str, str]:
     return observed
 
 
+def validate_model_eos_profile(model_dir: Path) -> dict[str, Any]:
+    tokenizer_config = load_json(model_dir / "tokenizer_config.json")
+    decoder = tokenizer_config.get("added_tokens_decoder")
+    if not isinstance(decoder, dict):
+        raise ValueError("final SFT tokenizer has no added-token decoder")
+    target = decoder.get(str(EXPECTED_EOS_TOKEN_ID))
+    source = decoder.get(str(BASE_EOS_TOKEN_ID))
+    if (
+        tokenizer_config.get("eos_token") != EXPECTED_EOS_TOKEN
+        or not isinstance(target, dict)
+        or target.get("content") != EXPECTED_EOS_TOKEN
+        or target.get("special") is not True
+        or not isinstance(source, dict)
+        or source.get("content") != BASE_EOS_TOKEN
+    ):
+        raise ValueError("downloaded final SFT tokenizer EOS profile is not exact")
+    model_config = load_json(model_dir / "config.json")
+    generation_config = load_json(model_dir / "generation_config.json")
+    text_config = model_config.get("text_config")
+    generation_eos = generation_config.get("eos_token_id")
+    if (
+        int(model_config.get("eos_token_id", -1)) != EXPECTED_EOS_TOKEN_ID
+        or not isinstance(text_config, dict)
+        or int(text_config.get("eos_token_id", -1)) != BASE_EOS_TOKEN_ID
+        or not isinstance(generation_eos, list)
+        or BASE_EOS_TOKEN_ID not in generation_eos
+        or EXPECTED_EOS_TOKEN_ID not in generation_eos
+    ):
+        raise ValueError("downloaded final SFT model/generation EOS profile is not exact")
+    return {
+        "tokenizer_eos_token": EXPECTED_EOS_TOKEN,
+        "tokenizer_eos_token_id": EXPECTED_EOS_TOKEN_ID,
+        "generation_eos_token_ids": generation_eos,
+    }
+
+
 def validate_model(model_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     model_manifest, spec = load_model_spec(ROOT)
     if model_manifest != manifest:
         raise ValueError("supplied manifest does not match the model download contract")
-    return validate_model_dir(model_dir, spec)
+    summary = validate_model_dir(model_dir, spec)
+    return {**summary, **validate_model_eos_profile(model_dir)}
 
 
 def main() -> None:
@@ -268,6 +365,7 @@ def main() -> None:
             dict(value),
             data_mode=data_mode,
             hf_dataset=manifest.get("hf_dataset"),
+            sft_model=manifest.get("sft_model"),
         )
         for name, value in manifest["objectives"].items()
     }
