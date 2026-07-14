@@ -38,6 +38,7 @@ try:
         POST_TRAINING_ROOT,
         REPO_ROOT,
         SOURCE_ROOT,
+        _training_arguments,
         entrypoint_command,
     )
 except ImportError:  # Direct execution from a flat source directory.
@@ -61,6 +62,7 @@ except ImportError:  # Direct execution from a flat source directory.
         POST_TRAINING_ROOT,
         REPO_ROOT,
         SOURCE_ROOT,
+        _training_arguments,
         entrypoint_command,
     )
 
@@ -180,87 +182,6 @@ def _global_rank() -> int:
     if rank < 0 or rank >= world_size:
         raise ValueError(f"RANK={rank} is outside WORLD_SIZE={world_size}")
     return rank
-
-
-def _gradient_accumulation_steps(training_cfg: Mapping[str, Any]) -> int:
-    configured = training_cfg.get("gradient_accumulation_steps", "auto")
-    if str(configured).lower() != "auto":
-        value = int(configured)
-        if value <= 0:
-            raise ValueError("gradient_accumulation_steps must be positive")
-        return value
-    per_device = int(training_cfg.get("per_device_train_batch_size", 1))
-    effective = int(training_cfg.get("effective_batch_size", 128))
-    denominator = per_device * _world_size()
-    if effective % denominator:
-        raise ValueError(
-            "effective_batch_size must be divisible by per_device_train_batch_size * WORLD_SIZE: "
-            f"{effective} % {denominator} != 0"
-        )
-    return effective // denominator
-
-
-def _training_arguments(
-    *,
-    run_cfg: Mapping[str, Any],
-    training_cfg: Mapping[str, Any],
-    output_dir: Path,
-    has_eval: bool,
-    smoke_step: bool,
-) -> Any:
-    import torch
-    from transformers import TrainingArguments
-
-    dtype = str(training_cfg.get("dtype", "")).strip().lower()
-    if dtype not in {"bf16", "bfloat16"}:
-        raise ValueError("training.dtype must be bfloat16; no automatic precision substitution is allowed")
-    if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
-        raise RuntimeError("the configured bfloat16 CUDA execution contract is unavailable")
-    report_to = training_cfg.get("report_to", [])
-    if isinstance(report_to, str):
-        report_to = [] if report_to.lower() in {"none", "[]", ""} else [report_to]
-    eval_strategy = str(training_cfg.get("eval_strategy", "steps" if has_eval else "no"))
-    kwargs: dict[str, Any] = {
-        "output_dir": str(output_dir),
-        "overwrite_output_dir": False,
-        "per_device_train_batch_size": int(training_cfg.get("per_device_train_batch_size", 1)),
-        "per_device_eval_batch_size": int(training_cfg.get("per_device_eval_batch_size", 1)),
-        "gradient_accumulation_steps": _gradient_accumulation_steps(training_cfg),
-        "learning_rate": float(training_cfg.get("learning_rate", 5e-6)),
-        "warmup_ratio": float(training_cfg.get("warmup_ratio", 0.1)),
-        "lr_scheduler_type": str(training_cfg.get("scheduler", "cosine")),
-        "optim": str(training_cfg.get("optimizer", "adamw_torch")),
-        "max_grad_norm": float(training_cfg.get("max_grad_norm", 5.0)),
-        "weight_decay": float(training_cfg.get("weight_decay", 0.0)),
-        "num_train_epochs": float(training_cfg.get("num_train_epochs", 1.0)),
-        "max_steps": 1 if smoke_step else int(training_cfg.get("max_steps", -1)),
-        "save_strategy": "no" if smoke_step else str(training_cfg.get("save_strategy", "steps")),
-        "save_steps": int(training_cfg.get("save_steps", 100)),
-        "save_total_limit": int(training_cfg.get("save_total_limit", 2)),
-        "logging_steps": 1 if smoke_step else int(training_cfg.get("logging_steps", 1)),
-        "dataloader_num_workers": int(training_cfg.get("dataloader_num_workers", 0)),
-        "dataloader_pin_memory": bool(training_cfg.get("dataloader_pin_memory", True)),
-        "remove_unused_columns": False,
-        "label_names": [],
-        "prediction_loss_only": True,
-        "save_safetensors": True,
-        "seed": int(run_cfg.get("seed", 42)),
-        "data_seed": int(run_cfg.get("seed", 42)),
-        "bf16": True,
-        "fp16": False,
-        "report_to": list(report_to),
-        "run_name": str(run_cfg.get("id", "dqs_mpo_setting5")),
-        "ddp_find_unused_parameters": (
-            bool(training_cfg.get("ddp_find_unused_parameters", False)) if _world_size() > 1 else None
-        ),
-        "eval_steps": int(training_cfg.get("eval_steps", 250)),
-    }
-    kwargs["eval_strategy"] = eval_strategy
-    if kwargs["ddp_find_unused_parameters"] is None:
-        del kwargs["ddp_find_unused_parameters"]
-    # The runtime is version-pinned.  Never drop unsupported arguments to
-    # accommodate a different Transformers API.
-    return TrainingArguments(**kwargs)
 
 
 def _latest_checkpoint(output_dir: Path) -> Path | None:

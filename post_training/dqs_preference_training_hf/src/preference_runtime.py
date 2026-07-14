@@ -133,31 +133,20 @@ def _gradient_accumulation_steps(training_cfg: Mapping[str, Any]) -> int:
     return effective // denominator
 
 
-def _training_arguments(
+def _training_argument_kwargs(
     *,
     run_cfg: Mapping[str, Any],
     training_cfg: Mapping[str, Any],
     output_dir: Path,
     has_eval: bool,
     smoke_step: bool,
-) -> Any:
-    import torch
-    from transformers import TrainingArguments
-
-    dtype = str(training_cfg.get("dtype", "")).strip().lower()
-    if dtype not in {"bf16", "bfloat16"}:
-        raise ValueError(
-            "training.dtype must be bfloat16; no automatic precision substitution is allowed"
-        )
-    if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
-        raise RuntimeError("the configured bfloat16 CUDA execution contract is unavailable")
+) -> dict[str, Any]:
     report_to = training_cfg.get("report_to", [])
     if isinstance(report_to, str):
         report_to = [] if report_to.lower() in {"none", "[]", ""} else [report_to]
     eval_strategy = str(training_cfg.get("eval_strategy", "steps" if has_eval else "no"))
     kwargs: dict[str, Any] = {
         "output_dir": str(output_dir),
-        "overwrite_output_dir": False,
         "per_device_train_batch_size": int(training_cfg.get("per_device_train_batch_size", 1)),
         "per_device_eval_batch_size": int(training_cfg.get("per_device_eval_batch_size", 1)),
         "gradient_accumulation_steps": _gradient_accumulation_steps(training_cfg),
@@ -178,7 +167,6 @@ def _training_arguments(
         "remove_unused_columns": False,
         "label_names": [],
         "prediction_loss_only": True,
-        "save_safetensors": True,
         "seed": int(run_cfg.get("seed", 42)),
         "data_seed": int(run_cfg.get("seed", 42)),
         "bf16": True,
@@ -195,6 +183,37 @@ def _training_arguments(
     kwargs["eval_strategy"] = eval_strategy
     if kwargs["ddp_find_unused_parameters"] is None:
         del kwargs["ddp_find_unused_parameters"]
+    return kwargs
+
+
+def _training_arguments(
+    *,
+    run_cfg: Mapping[str, Any],
+    training_cfg: Mapping[str, Any],
+    output_dir: Path,
+    has_eval: bool,
+    smoke_step: bool,
+) -> Any:
+    import torch
+    from transformers import TrainingArguments
+
+    dtype = str(training_cfg.get("dtype", "")).strip().lower()
+    if dtype not in {"bf16", "bfloat16"}:
+        raise ValueError(
+            "training.dtype must be bfloat16; no automatic precision substitution is allowed"
+        )
+    if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
+        raise RuntimeError("the configured bfloat16 CUDA execution contract is unavailable")
+    kwargs = _training_argument_kwargs(
+        run_cfg=run_cfg,
+        training_cfg=training_cfg,
+        output_dir=output_dir,
+        has_eval=has_eval,
+        smoke_step=smoke_step,
+    )
+    # This is the exact Transformers 5.5 constructor surface. In v5,
+    # overwrite_output_dir was removed and model saving is safetensors-only,
+    # so save_safetensors was removed as well. Never signature-filter kwargs.
     return TrainingArguments(**kwargs)
 
 

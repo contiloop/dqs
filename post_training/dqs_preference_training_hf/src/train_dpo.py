@@ -470,7 +470,6 @@ def dpo_config_kwargs(
     )
     kwargs: dict[str, Any] = {
         "output_dir": str(output_dir),
-        "overwrite_output_dir": False,
         "per_device_train_batch_size": int(training["per_device_train_batch_size"]),
         "per_device_eval_batch_size": int(training["per_device_eval_batch_size"]),
         "gradient_accumulation_steps": _gradient_accumulation_steps(training),
@@ -493,7 +492,6 @@ def dpo_config_kwargs(
         "remove_unused_columns": True,
         "label_names": [],
         "prediction_loss_only": True,
-        "save_safetensors": True,
         "seed": int(run["seed"]),
         "data_seed": int(run["seed"]),
         "bf16": True,

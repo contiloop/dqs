@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import inspect
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -13,9 +15,14 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from preference_runtime import POST_TRAINING_ROOT, REPO_ROOT, _output_dir  # noqa: E402
+from preference_runtime import (  # noqa: E402
+    POST_TRAINING_ROOT,
+    REPO_ROOT,
+    _output_dir,
+    _training_argument_kwargs,
+)
 from train_cpo import validate_config as validate_cpo_config  # noqa: E402
-from train_dpo import validate_config as validate_dpo_config  # noqa: E402
+from train_dpo import dpo_config_kwargs, validate_config as validate_dpo_config  # noqa: E402
 from train_mpo import _validate_hard_config  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -42,6 +49,62 @@ class ReleaseContractTest(unittest.TestCase):
         )
         validate_cpo_config(self.load("cpo.yaml"))
         validate_dpo_config(self.load("dpo.yaml"))
+
+    def test_argument_kwargs_match_the_pinned_v5_constructor_surfaces(self) -> None:
+        from transformers import TrainingArguments
+
+        removed_v5_fields = {"overwrite_output_dir", "save_safetensors"}
+        training_parameters = set(inspect.signature(TrainingArguments).parameters)
+        dpo_024_parameters_used = {
+            "beta",
+            "dataset_num_proc",
+            "disable_dropout",
+            "f_divergence_type",
+            "generate_during_eval",
+            "label_smoothing",
+            "ld_alpha",
+            "loss_type",
+            "loss_weights",
+            "max_completion_length",
+            "max_length",
+            "max_prompt_length",
+            "pad_token",
+            "padding_free",
+            "precompute_ref_batch_size",
+            "precompute_ref_log_probs",
+            "reference_free",
+            "rpo_alpha",
+            "sync_ref_model",
+            "truncation_mode",
+            "use_liger_loss",
+            "use_logits_to_keep",
+            "use_weighting",
+        }
+        with patch.dict("os.environ", {"WORLD_SIZE": "1", "RANK": "0"}, clear=False):
+            for objective in ("mpo", "cpo"):
+                config = self.load(f"{objective}.yaml")
+                kwargs = _training_argument_kwargs(
+                    run_cfg=config["run"],
+                    training_cfg=config["training"],
+                    output_dir=ROOT / "outputs" / "constructor-test" / objective,
+                    has_eval=False,
+                    smoke_step=True,
+                )
+                self.assertFalse(removed_v5_fields & set(kwargs))
+                self.assertEqual(set(kwargs) - training_parameters, set())
+
+            config = self.load("dpo.yaml")
+            kwargs = dpo_config_kwargs(
+                run=config["run"],
+                loss=config["loss"],
+                reference=config["reference"],
+                training=config["training"],
+                output_dir=ROOT / "outputs" / "constructor-test" / "dpo",
+                pad_token="<pad>",
+                smoke_step=True,
+            )
+        self.assertFalse(removed_v5_fields & set(kwargs))
+        self.assertEqual(set(kwargs) - training_parameters, dpo_024_parameters_used)
 
     def test_outputs_are_isolated_and_distinct(self) -> None:
         outputs = []
