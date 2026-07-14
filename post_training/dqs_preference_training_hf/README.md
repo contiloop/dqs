@@ -100,6 +100,13 @@ make train-mpo MPO_CONFIG=configs/mpo_constant.yaml
 검증을 완료했으므로 이 config는 smoke receipt를 요구하지 않는다. 필요할 때만
 `make smoke-mpo MPO_CONFIG=configs/mpo_constant.yaml`을 별도로 실행할 수 있다.
 
+동일한 constant-LR/no-clip 조건에서 SFT mixing coefficient만 `10`에서 `5`로
+낮춘 ablation은 별도 config로 실행한다. output directory와 W&B run ID도 분리된다.
+
+```bash
+make train-mpo MPO_CONFIG=configs/mpo_constant_lambda5.yaml
+```
+
 여러 GPU를 사용할 때는 smoke와 full train에 완전히 동일한 `LAUNCH`를 넘긴다.
 아래 예시는 mPO 4-GPU 실행이다.
 
