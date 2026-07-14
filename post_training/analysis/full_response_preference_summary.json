@@ -1,0 +1,11 @@
+{
+  "artifact_sha256": "4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187",
+  "chosen_source": "raw golden_pairs target (Teacher post-edit)",
+  "contract_sha256": "3815c68b92e78793a72218fd8dc76e1f899d95c3f5d522bb5f34ec74bf3172b4",
+  "excluded_identical_response_rows": 1,
+  "max_observed_sequence_tokens": 2825,
+  "prompt_format": "pre-serialized; do not apply a second chat template",
+  "rejected_source": "raw golden_pairs student_translation (Student full output)",
+  "rows": 5200,
+  "schema_version": "dqs.full_response_preference.v1"
+}

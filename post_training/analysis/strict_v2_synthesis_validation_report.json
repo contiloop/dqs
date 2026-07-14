@@ -1,0 +1,24 @@
+{
+  "candidate_sha256": "fc79519ab66801247c2c3336cf818117ff02363baafce15a127a763321c98cd8",
+  "invariants": [
+    "raw terminology rows partition exactly into accepted or rejected",
+    "source/student/teacher fields equal the raw golden row byte-for-byte",
+    "every terminology annotation is represented atomically",
+    "only recorded term spans differ between chosen and rejected",
+    "rejected term spans reconstruct chosen byte-for-byte",
+    "accepted rows have no warnings, repair, or fallback",
+    "roundtrip/sample subsets and all output checksums are exact"
+  ],
+  "known_bad_rows_absent": 34,
+  "raw_manifest_sha256": "43fdccfcd9d2d2858cd4894084c0b7abf0ac4afc3e2ac9fd6772b6185a847eaf",
+  "schema_version": "dqs_mpo_strict_synthesis_v2",
+  "status": "passed",
+  "synthesis_version": "dqs_teacher_postedit_term_reversion_v4_strict_by_construction",
+  "validated_candidates": 6211,
+  "validated_raw_rows": 23000,
+  "validated_rejections": 2841,
+  "validated_replacement_spans": 8437,
+  "validated_roundtrip_rows": 1502,
+  "validated_samples": 10,
+  "validated_terminology_rows": 9052
+}

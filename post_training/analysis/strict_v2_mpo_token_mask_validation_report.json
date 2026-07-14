@@ -1,0 +1,33 @@
+{
+  "invariants": [
+    "fresh prompt and completion tokenization exactly reproduces input_ids",
+    "prompt tokens are zero in completion and term masks",
+    "EOS is supervised by completion SFT but excluded from term masks",
+    "chosen and rejected term masks are independently offset-aligned",
+    "all term subtokens are selected and masks are non-empty",
+    "chosen and rejected masked token-ID sequences are distinct",
+    "non-whitespace token boundary crossings are rejected",
+    "prediction indices equal input token indices minus one",
+    "no accepted row is truncated or exceeds max_seq_length",
+    "accepted and rejected rows exactly partition the char-span candidates",
+    "summary counts and checksums are exact"
+  ],
+  "rows_with_independent_term_token_counts": 4327,
+  "status": "passed",
+  "tokenized_sha256": "e5512852a8db36597ef9cf5e080d745b57c25650a65dcb3a225d0a6ecfa1f463",
+  "tokenizer": {
+    "bos_token_id": 2,
+    "class": "GemmaTokenizer",
+    "eos_token": "<eos>",
+    "eos_token_id": 1,
+    "is_fast": true,
+    "name": "google/gemma-4-E2B-it",
+    "pad_token_id": 0,
+    "requested_revision": "main",
+    "resolved_revision": "9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf"
+  },
+  "validated_candidates": 6211,
+  "validated_rejections": 706,
+  "validated_samples": 10,
+  "validated_tokenized_pairs": 5505
+}

@@ -1,0 +1,187 @@
+{
+  "artifact_sha256": "e5512852a8db36597ef9cf5e080d745b57c25650a65dcb3a225d0a6ecfa1f463",
+  "comparison_to_v1": {
+    "new_only_rows": 0,
+    "new_rows": 5505,
+    "old_rows": 5888,
+    "removed_from_old_rows": 383,
+    "removed_primary_reasons": {
+      "chosen_delimiter_unbalanced": 3,
+      "delimiter_structure_changed": 2,
+      "introduced_left_boundary_overlap": 12,
+      "introduced_left_boundary_token_duplicate": 3,
+      "introduced_particle_or_ending_collision": 3,
+      "introduced_right_boundary_overlap": 8,
+      "introduced_right_boundary_token_duplicate": 1,
+      "quality_flag": 326,
+      "response_wide_sentence_replacement": 4,
+      "whole_completion_term_replacement": 21
+    }
+  },
+  "final_rows": 5505,
+  "invariants": [
+    "strict char candidates partition exactly into final or token-boundary rejection",
+    "no synthesis rejection reason remains in final rows",
+    "no quality warning or long target term remains",
+    "term masks are non-empty and do not cover whole completions",
+    "all 34 previously identified malformed pairs are absent",
+    "artifact row count and SHA256 match the immutable contract"
+  ],
+  "known_bad_rows_present": [],
+  "long_target_term_rows": 0,
+  "multiple_annotation_rows": 1254,
+  "orthography_only_mapping_count": 13,
+  "orthography_only_mappings": [
+    {
+      "pair_id": "subset_000:row_000000684693",
+      "reason_ko": [
+        "생물학 용어로서 '동물극'이 더 자연스러움."
+      ],
+      "student_term": "동물-극",
+      "teacher_term": "동물극"
+    },
+    {
+      "pair_id": "subset_003:row_000000270488",
+      "reason_ko": [
+        "국내 기업명 표기 관례에 따라 '&'를 제거함."
+      ],
+      "student_term": "정신엔지니어링&건설",
+      "teacher_term": "정신엔지니어링건설"
+    },
+    {
+      "pair_id": "subset_003:row_000002242734",
+      "reason_ko": [
+        "금융/회계 용어로서 붙여 쓰는 것이 일반적임."
+      ],
+      "student_term": "현금 운전 자본",
+      "teacher_term": "현금운전자본"
+    },
+    {
+      "pair_id": "subset_004:row_000000434386",
+      "reason_ko": [
+        "바지(barge)와 프리미엄은 별개의 단어이므로 띄어쓰기가 필요합니다."
+      ],
+      "student_term": "바지프리미엄",
+      "teacher_term": "바지 프리미엄"
+    },
+    {
+      "pair_id": "subset_006:row_000001098145",
+      "reason_ko": [
+        "운전자본은 붙여 쓰는 것이 일반적입니다."
+      ],
+      "student_term": "운전 자본",
+      "teacher_term": "운전자본"
+    },
+    {
+      "pair_id": "subset_007:row_000001660537",
+      "reason_ko": [
+        "표와 명사 사이 띄어쓰기 수정."
+      ],
+      "student_term": "계약상 약정 및 의무표",
+      "teacher_term": "계약상 약정 및 의무 표"
+    },
+    {
+      "pair_id": "subset_008:row_000001193361",
+      "reason_ko": [
+        "MIV는 제품명 일부이므로 괄호로 분리하지 않음."
+      ],
+      "student_term": "MIV(Radial Catheters)는",
+      "teacher_term": "MIV Radial Catheters는"
+    },
+    {
+      "pair_id": "subset_013:row_000001466857",
+      "reason_ko": [
+        "일반적인 업계 용어 표기법에 따라 하이픈을 추가하는 것이 더 정확합니다."
+      ],
+      "student_term": "권리 반환(back in rights)",
+      "teacher_term": "권리 반환(back-in rights)"
+    },
+    {
+      "pair_id": "subset_015:row_000000525895",
+      "reason_ko": [
+        "한국어 맞춤법상 주택담보대출은 붙여 쓰는 것이 일반적임."
+      ],
+      "student_term": "주택 담보 대출",
+      "teacher_term": "주택담보대출"
+    },
+    {
+      "pair_id": "subset_015:row_000000601512",
+      "reason_ko": [
+        "금융 용어 관례에 따라 하이픈을 사용하는 것이 적절함"
+      ],
+      "student_term": "내재가치가 깊은(deep in the money)",
+      "teacher_term": "내재가치가 깊은(deep in-the-money)"
+    },
+    {
+      "pair_id": "subset_015:row_000001520267",
+      "reason_ko": [
+        "복합 명사구의 가독성을 위해 구분 기호 조정."
+      ],
+      "student_term": "이벤트, 경험 및 권리",
+      "teacher_term": "이벤트·경험 및 권리"
+    },
+    {
+      "pair_id": "subset_017:row_000000491613",
+      "reason_ko": [
+        "성장률이나 비율을 의미하므로 퍼센트 단위를 명시하는 것이 정확함"
+      ],
+      "student_term": "10대 중반",
+      "teacher_term": "10%대 중반"
+    },
+    {
+      "pair_id": "subset_020:row_000001590773",
+      "reason_ko": [
+        "띄어쓰기 오류."
+      ],
+      "student_term": "금지수",
+      "teacher_term": "금 지수"
+    }
+  ],
+  "quality_warning_rows": 0,
+  "repeated_mapping_rows": 204,
+  "replacement_spans": 7289,
+  "roundtrip_rows": 1372,
+  "status": "passed",
+  "strict_char_candidates": 6211,
+  "subset_rows": {
+    "subset_000": 260,
+    "subset_001": 270,
+    "subset_002": 250,
+    "subset_003": 253,
+    "subset_004": 200,
+    "subset_005": 234,
+    "subset_006": 237,
+    "subset_007": 254,
+    "subset_008": 210,
+    "subset_009": 223,
+    "subset_010": 259,
+    "subset_011": 232,
+    "subset_012": 261,
+    "subset_013": 226,
+    "subset_014": 235,
+    "subset_015": 231,
+    "subset_016": 229,
+    "subset_017": 244,
+    "subset_018": 239,
+    "subset_019": 225,
+    "subset_020": 245,
+    "subset_021": 239,
+    "subset_022": 249
+  },
+  "teacher_labels": {
+    "critical": 480,
+    "major": 1649,
+    "minor": 3376
+  },
+  "term_annotation_count_distribution": {
+    "1": 4251,
+    "2": 1073,
+    "3": 155,
+    "4": 16,
+    "5": 9,
+    "9": 1
+  },
+  "token_boundary_rejections": 706,
+  "training_semantic_sha256": "78ee0596b0f312e8369944f62d75ba16224b81b74087b8989f062e613e8132ef",
+  "whole_completion_term_mask_rows": 0
+}

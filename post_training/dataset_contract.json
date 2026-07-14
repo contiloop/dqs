@@ -1,0 +1,19 @@
+{
+  "artifact_sha256": "8f127fa0d0f8b45761f50fa0e53a44d46fb03bab8ac09a06e32ac63609e41971",
+  "eos_token_id": 1,
+  "max_seq_length": 2908,
+  "pad_token_id": 0,
+  "row_count": 6714,
+  "schema_version": "dqs_mpo_token_masks_v1",
+  "source_hf_repo": "alwaysgood/dqs-runs",
+  "source_hf_revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+  "source_run": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+  "source_subset_count": 23,
+  "synthesis_version": "dqs_teacher_postedit_term_reversion_v3_mechanical_exact",
+  "training_semantic_sha256": "cde67acd6f80f835d1f5c70423b9bba725622365bf8c1d697b2443af69f14123",
+  "tokenizer_backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
+  "tokenizer_name": "google/gemma-4-E2B-it",
+  "tokenizer_requested_revision": "main",
+  "tokenizer_resolved_revision": "9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf",
+  "tokenizer_vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42"
+}

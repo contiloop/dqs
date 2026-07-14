@@ -1,0 +1,12 @@
+# Source-verified API contract for Gemma4 mPO/CPO and Unsloth-patched DPO.
+# Install into a CUDA image with 2.4 <= torch < 2.11; torch must match CUDA.
+transformers==5.5.0
+unsloth==2026.7.2
+unsloth-zoo==2026.7.2
+accelerate==1.14.0
+datasets==4.3.0
+huggingface-hub==1.21.0
+tokenizers==0.22.2
+trl==0.24.0
+PyYAML==6.0.3
+wandb==0.28.0
