@@ -1,8 +1,9 @@
 # DQS preference post-training runtime
 
 이 디렉터리는 연구·데이터 합성 작업공간이 아니라 외부 GPU 인스턴스에서
-`mPO`, `CPO`, `DPO`를 실행하기 위한 생성형 배포 패키지다. 원본 SFT 모델과
-평가 런타임은 포함하지 않는다.
+`mPO`, `CPO`, `DPO`를 실행하기 위한 생성형 배포 패키지다. SFT 모델 자체와
+평가 런타임은 Git에 포함하지 않으며, SFT 모델은 고정된 Hub revision에서 먼저
+명시적으로 내려받는다.
 
 ## 포함 범위
 
@@ -19,13 +20,16 @@ output 경로로 수행한다.
 ## 실행 순서
 
 CUDA/PyTorch는 인스턴스에 맞게 먼저 설치한다. 그 뒤 나머지 고정 버전을
-설치하고 패키지를 검증한 다음, 학습 전에 세 데이터를 명시적으로 내려받는다.
+설치하고 패키지를 검증한 다음, 학습 전에 세 데이터와 SFT final 모델을
+명시적으로 내려받는다.
 
 ```bash
 make set
 make validate
 make download-data
+make download-model
 make validate-data
+make validate-model
 make validate-runtime
 make test
 make dry-run
@@ -48,9 +52,24 @@ trainer는 `data.source: local`만 허용한다. 따라서 `make download-data` 
 dry-run/smoke/full train에서는 네트워크 다운로드가 일어나지 않으며 데이터가
 없으면 즉시 실패한다.
 
-SFT 최종 모델은 기본적으로 `models/sft_final`에 둔다. 다른 위치를 쓰면 모든
-명령에 동일한 `MODEL_DIR`를 넘긴다. 모델 안의 `dqs_stage_model.json`이 세
-objective config의 run/subset/global-step 요구사항과 정확히 일치해야 한다.
+`make download-model`은 `alwaysgood/dqs-runs`의 exact 40-hex commit에서 해당
+run의 `checkpoints/final/` 8개 파일(총 10,279,726,920 bytes)만 임시 staging으로
+받는다. 모든 파일의 크기와 SHA256, 전체 파일 목록, `dqs_stage_model.json`의
+run/subset/global-step/full-tuning 값이 전부 맞아야 `models/sft_final`에 설치한다.
+`checkpoint-184/`의 optimizer state는 다운로드하지 않으며 다른 모델이나 최신
+branch로 fallback하지 않는다.
+
+기존 모델이 정확하면 네트워크를 사용하지 않고 재사용한다. 기존 파일이
+손상됐으면 자동 교체하지 않으며, 알려진 8개 파일 외 다른 파일이 없는 경우에만
+명시적으로 교체할 수 있다.
+
+```bash
+make download-model MODEL_DOWNLOAD_WORKERS=16
+make download-model MODEL_REPLACE=1
+```
+
+SFT 최종 모델은 기본적으로 `models/sft_final`에 둔다. 다른 위치를 쓰면 다운로드와
+학습의 모든 명령에 동일한 `MODEL_DIR`를 넘긴다.
 
 ```bash
 make validate-model MODEL_DIR=/workspace/models/sft_final

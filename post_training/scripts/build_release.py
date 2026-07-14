@@ -77,6 +77,54 @@ OBJECTIVES: dict[str, dict[str, str]] = {
     },
 }
 
+SFT_MODEL_SOURCE: dict[str, Any] = {
+    "repo_id": "alwaysgood/dqs-runs",
+    "repo_type": "dataset",
+    "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+    "remote_dir": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+    "local_dir": "models/sft_final",
+    "expected_sft": {
+        "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+        "subset_idx": 22,
+        "global_step": 184,
+        "tuning_mode": "full",
+    },
+    "files": {
+        "chat_template.jinja": {
+            "size": 16804,
+            "sha256": "33204f1acb5bd0002713e16a593847f24ceeafe711ed88bda2a352dc996a3373",
+        },
+        "config.json": {
+            "size": 5111,
+            "sha256": "86c9621e8b8512a6e338e2ecce7d66ace31c596f77a7b358786bfad1cdcff353",
+        },
+        "dqs_stage_model.json": {
+            "size": 128,
+            "sha256": "cb4e2baa46d19fc0aad3adbb39bb23588947b202ea29caceac6e59292f560876",
+        },
+        "generation_config.json": {
+            "size": 203,
+            "sha256": "5439541d3bf0ba9ade7c1122dc14703f85f32a520150351b344b14f48c574cc2",
+        },
+        "model.safetensors": {
+            "size": 10247526494,
+            "sha256": "304387c31d762065420035d711ebed0eb6e296d0ee28c8918645ed3943fdaf4e",
+        },
+        "processor_config.json": {
+            "size": 1689,
+            "sha256": "32bdf45d2ad4cc29a0822ddd157a182de76644f0419a6228d151495256e9813c",
+        },
+        "tokenizer.json": {
+            "size": 32169626,
+            "sha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f",
+        },
+        "tokenizer_config.json": {
+            "size": 6865,
+            "sha256": "de3cba60561eb2ee6362e34274bb7196b87d8febf01d54a2356a1b1f5a14284b",
+        },
+    },
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -140,11 +188,13 @@ def _ensure_inputs(*, data_mode: str) -> None:
         *(RUNTIME_SOURCE_ROOT / name for name in RUNTIME_SOURCE_FILES),
         PACKAGE_ROOT / "requirements-gpu.txt",
         DEPLOYMENT_ASSETS / "Makefile",
-            DEPLOYMENT_ASSETS / "README.md",
-            DEPLOYMENT_ASSETS / "scripts" / "download_data.py",
-            DEPLOYMENT_ASSETS / "scripts" / "validate_bundle.py",
-            DEPLOYMENT_ASSETS / "tests" / "test_download_data.py",
-            DEPLOYMENT_ASSETS / "tests" / "test_release_contract.py",
+        DEPLOYMENT_ASSETS / "README.md",
+        DEPLOYMENT_ASSETS / "scripts" / "download_data.py",
+        DEPLOYMENT_ASSETS / "scripts" / "download_model.py",
+        DEPLOYMENT_ASSETS / "scripts" / "validate_bundle.py",
+        DEPLOYMENT_ASSETS / "tests" / "test_download_data.py",
+        DEPLOYMENT_ASSETS / "tests" / "test_download_model.py",
+        DEPLOYMENT_ASSETS / "tests" / "test_release_contract.py",
         *(
             RESEARCH_ROOT / "configs" / spec["config_source"]
             for spec in OBJECTIVES.values()
@@ -225,12 +275,20 @@ def _copy_assets(staging: Path) -> None:
         staging / "scripts" / "download_data.py",
     )
     shutil.copy2(
+        DEPLOYMENT_ASSETS / "scripts" / "download_model.py",
+        staging / "scripts" / "download_model.py",
+    )
+    shutil.copy2(
         DEPLOYMENT_ASSETS / "scripts" / "validate_bundle.py",
         staging / "scripts" / "validate_bundle.py",
     )
     shutil.copy2(
         DEPLOYMENT_ASSETS / "tests" / "test_download_data.py",
         staging / "tests" / "test_download_data.py",
+    )
+    shutil.copy2(
+        DEPLOYMENT_ASSETS / "tests" / "test_download_model.py",
+        staging / "tests" / "test_download_model.py",
     )
     shutil.copy2(
         DEPLOYMENT_ASSETS / "tests" / "test_release_contract.py",
@@ -376,6 +434,33 @@ def _content_manifest(staging: Path) -> tuple[dict[str, str], str]:
     return hashes, digest.hexdigest()
 
 
+def _sft_model_manifest(objectives: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    expected_values = {
+        (
+            value["expected_sft"]["run_id"],
+            int(value["expected_sft"]["subset_idx"]),
+            int(value["expected_sft"]["global_step"]),
+        )
+        for value in objectives.values()
+    }
+    expected = SFT_MODEL_SOURCE["expected_sft"]
+    pinned = (
+        expected["run_id"],
+        int(expected["subset_idx"]),
+        int(expected["global_step"]),
+    )
+    if expected_values != {pinned}:
+        raise ValueError(
+            "objective configs do not match the pinned downloadable full-SFT model"
+        )
+    files = SFT_MODEL_SOURCE["files"]
+    return {
+        **SFT_MODEL_SOURCE,
+        "file_count": len(files),
+        "total_size_bytes": sum(int(value["size"]) for value in files.values()),
+    }
+
+
 def _write_manifest(
     staging: Path,
     *,
@@ -383,15 +468,16 @@ def _write_manifest(
     hf_repo_id: str | None,
     hf_revision: str | None,
     objectives: dict[str, dict[str, Any]],
+    source_git_commit: str | None,
+    source_post_training_dirty: bool,
 ) -> dict[str, Any]:
     hashes, content_sha = _content_manifest(staging)
-    status = _git_value("status", "--short", "--", "post_training")
     manifest: dict[str, Any] = {
         "schema_version": "dqs_preference_release.v1",
         "bundle_name": "dqs_preference_training",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "source_git_commit": _git_value("rev-parse", "HEAD"),
-        "source_post_training_dirty": bool(status),
+        "source_git_commit": source_git_commit,
+        "source_post_training_dirty": source_post_training_dirty,
         "generator": "post_training/scripts/build_release.py",
         "data_mode": data_mode,
         "data_access": (
@@ -402,6 +488,7 @@ def _write_manifest(
             if data_mode == "hf"
             else None
         ),
+        "sft_model": _sft_model_manifest(objectives),
         "objectives": objectives,
         "runtime_requirements": "requirements-gpu.txt",
         "files": hashes,
@@ -436,6 +523,13 @@ def _archive(output: Path) -> tuple[Path, str]:
 def build(args: argparse.Namespace) -> dict[str, Any]:
     _validate_hf_args(args)
     _ensure_inputs(data_mode=args.data_mode)
+    # Capture provenance before creating the temporary staging directory under
+    # post_training/, otherwise the generator can mark its own staging files as
+    # uncommitted source changes.
+    source_git_commit = _git_value("rev-parse", "HEAD")
+    source_post_training_dirty = bool(
+        _git_value("status", "--short", "--", "post_training")
+    )
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
@@ -465,6 +559,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             hf_repo_id=args.hf_repo_id,
             hf_revision=args.hf_revision,
             objectives=objectives,
+            source_git_commit=source_git_commit,
+            source_post_training_dirty=source_post_training_dirty,
         )
         if output.exists():
             shutil.rmtree(output)

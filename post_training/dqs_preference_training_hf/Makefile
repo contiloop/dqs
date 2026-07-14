@@ -8,9 +8,11 @@ CPO_CONFIG ?= configs/cpo.yaml
 DPO_CONFIG ?= configs/dpo.yaml
 DOWNLOAD_WORKERS ?= 8
 DOWNLOAD_REPLACE ?= 0
+MODEL_DOWNLOAD_WORKERS ?= 8
+MODEL_REPLACE ?= 0
 SET_MODEL := --set model.name_or_path=$(MODEL_DIR)
 
-.PHONY: set validate download-data validate-data validate-runtime validate-model test \
+.PHONY: set validate download-data download-model download-all validate-data validate-runtime validate-model test \
 	dry-run dry-run-mpo dry-run-cpo dry-run-dpo \
 	smoke-mpo smoke-cpo smoke-dpo \
 	train-mpo train-cpo train-dpo
@@ -24,6 +26,13 @@ validate:
 download-data: validate
 	$(PYTHON) scripts/download_data.py \
 		--workers $(DOWNLOAD_WORKERS) $(if $(filter 1,$(DOWNLOAD_REPLACE)),--replace,)
+
+download-model: validate
+	$(PYTHON) scripts/download_model.py \
+		--output $(MODEL_DIR) \
+		--workers $(MODEL_DOWNLOAD_WORKERS) $(if $(filter 1,$(MODEL_REPLACE)),--replace,)
+
+download-all: download-data download-model
 
 validate-data:
 	$(PYTHON) scripts/download_data.py --check

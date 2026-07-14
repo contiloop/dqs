@@ -126,7 +126,7 @@ class NoFallbackContractTest(unittest.TestCase):
 
     def test_final_sft_marker_is_mandatory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            final_dir = Path(temp_dir) / "final"
+            final_dir = Path(temp_dir) / "sft_final"
             final_dir.mkdir()
             config = {
                 "name_or_path": str(final_dir),

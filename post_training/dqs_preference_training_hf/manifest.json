@@ -1,5 +1,5 @@
 {
-  "bundle_content_sha256": "8607e69e8d46af330e3cf74c9d8dd40b49c7272e7b99424aaab3e2f5d194cda5",
+  "bundle_content_sha256": "00520598e7dfdd31b4f3d8b19aa2e69605dcf0f9dad3838c2092ba28f63fa21b",
   "bundle_name": "dqs_preference_training",
   "data_access": "explicit_download_then_local",
   "data_mode": "hf",
@@ -14,8 +14,8 @@
   "files": {
     ".dqs-preference-release": "90545a4cfce024520ac9f8350f87a823bb728df7c7601df25612c894423119e9",
     ".gitignore": "122e62b77036ea7309a3f1395690367f5982aa3150ba7957171ce729127597e3",
-    "Makefile": "484df2b71a79cafc8dbd861cbaf65961c03c1d4131da10b362bc1d8d2ec5f64c",
-    "README.md": "265dea3c6965448d238a45c116b4981e31d822df16094dcbdea3ac809fcccced",
+    "Makefile": "fb336efb547abc2057f0247ce95411b352e248d534d026dc0d6c78041db4b75a",
+    "README.md": "c84c3685e1e437341853c0592cc36583e03d16eb2f04388b1c6aad1defb3f157",
     "configs/cpo.yaml": "1c92f58382eb1367883c58196803ca8bb7e83736c97effe6171e6028502d3c36",
     "configs/dpo.yaml": "ea1370e26ac27c26e42d18a5471cd27faddab31d3695fe57547c967b3b8769db",
     "configs/mpo.yaml": "ee0c6f830fde2e1d097f0556f5e780d43b6899e1a8dc13e32e2d717bb9388125",
@@ -24,7 +24,8 @@
     "data/contracts/mpo.json": "184178b8b8f04cb6a580e1899aacc16cf4cc65d5d4c3f9e3c4489d6ea1dc8a46",
     "requirements-gpu.txt": "72e1c92a4b889b25b319dedd58c474be3d83de66bcb559ad75623a91ebee746b",
     "scripts/download_data.py": "1b716827b1cb008c739a616040b7f7491d73db83504de6290166eb9d9253eb9f",
-    "scripts/validate_bundle.py": "f64a09463a4f4e62399d2ae097f532a2157bbd265402590de2bdc468d8191ffc",
+    "scripts/download_model.py": "31c55a5dfb825130ff2b8431f6dc27c2ce51526c1eec7c6285445c9e3db8ceb4",
+    "scripts/validate_bundle.py": "0363cc23bb4937eca57976c49708f90b72c84d608ae1e451f3148698a5b22305",
     "src/__init__.py": "2d577c75b27ab0f22bfe167688190498052bb1286d32241d08897f32fe68e9cd",
     "src/cpo_objective.py": "8d9161bcc91c6561b9804bc02c4909eecabfb63caf7d214b0736c5c2991cc0c2",
     "src/cpo_trainer.py": "cfe6b4d157f9845118fb02549f2d928b88738a48c86b623b761476cde4abeda8",
@@ -32,7 +33,7 @@
     "src/full_preference_data.py": "2fa96334b049a653bd9303be23a5ac7dae4645bc71c331e0c1fb3142d5bb7834",
     "src/mpo_data.py": "d7101dac83a18f00c7195fbc318f0ec3d50a534e312c4309eeeb8b879c175889",
     "src/mpo_masking.py": "06ea76e3dc36780e0c1347a0f40bca512d428320f87c74f7ab857d3e8696c0b0",
-    "src/mpo_model.py": "8db79dece6bf97437118bf895716c3676c1d80835aba9223fc16849f7b4718c5",
+    "src/mpo_model.py": "55faa890c211c5291af8e73952a561ea95bb33bdec7c77e498841e8b8affa412",
     "src/mpo_objective.py": "7f348953e1e1aa5ff7bb1eb8d1371fe081dbe07487bba3cc4000e03319873a20",
     "src/mpo_trainer.py": "5a46f483117e0fe391b69864f46690fc278fc8abbcdb6d1292f3ba85f7774b87",
     "src/mpo_wandb.py": "1c95cbaef19f34a692426f62b13b0a5f2dc62995979b1aa40da3c89a57b56a65",
@@ -41,9 +42,10 @@
     "src/train_dpo.py": "32621a99da7de92c3c21153343d257efe35e8947278e985078e70024e70bc19c",
     "src/train_mpo.py": "2fbb208036d58400e584549a4fefd33f977ae1f9c28559ae403f9804a620d740",
     "tests/test_download_data.py": "b61b9df115671e510735beb71487ea4ce3db582b04036a39922152ee63752503",
-    "tests/test_release_contract.py": "1a4d50e012450f92ba97ca760fc6e46418c7de23c330d0be4c7e8ff07c46d428"
+    "tests/test_download_model.py": "ab3a9fc779d6c73af864d5ac44e35576f53d359721804be5afcde216340c66e7",
+    "tests/test_release_contract.py": "f78a1f89bbdd29f033990c30660011afc69eda73c9b8eb976decea5a700418fb"
   },
-  "generated_at_utc": "2026-07-14T11:40:48.901852+00:00",
+  "generated_at_utc": "2026-07-14T11:49:25.625163+00:00",
   "generator": "post_training/scripts/build_release.py",
   "hf_dataset": {
     "repo_id": "alwaysgood/dqs-post-training",
@@ -110,6 +112,55 @@
   },
   "runtime_requirements": "requirements-gpu.txt",
   "schema_version": "dqs_preference_release.v1",
-  "source_git_commit": "e3f5a5768cf05154bc27f1ac98a848fd3af84fc6",
-  "source_post_training_dirty": false
+  "sft_model": {
+    "expected_sft": {
+      "global_step": 184,
+      "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+      "subset_idx": 22,
+      "tuning_mode": "full"
+    },
+    "file_count": 8,
+    "files": {
+      "chat_template.jinja": {
+        "sha256": "33204f1acb5bd0002713e16a593847f24ceeafe711ed88bda2a352dc996a3373",
+        "size": 16804
+      },
+      "config.json": {
+        "sha256": "86c9621e8b8512a6e338e2ecce7d66ace31c596f77a7b358786bfad1cdcff353",
+        "size": 5111
+      },
+      "dqs_stage_model.json": {
+        "sha256": "cb4e2baa46d19fc0aad3adbb39bb23588947b202ea29caceac6e59292f560876",
+        "size": 128
+      },
+      "generation_config.json": {
+        "sha256": "5439541d3bf0ba9ade7c1122dc14703f85f32a520150351b344b14f48c574cc2",
+        "size": 203
+      },
+      "model.safetensors": {
+        "sha256": "304387c31d762065420035d711ebed0eb6e296d0ee28c8918645ed3943fdaf4e",
+        "size": 10247526494
+      },
+      "processor_config.json": {
+        "sha256": "32bdf45d2ad4cc29a0822ddd157a182de76644f0419a6228d151495256e9813c",
+        "size": 1689
+      },
+      "tokenizer.json": {
+        "sha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f",
+        "size": 32169626
+      },
+      "tokenizer_config.json": {
+        "sha256": "de3cba60561eb2ee6362e34274bb7196b87d8febf01d54a2356a1b1f5a14284b",
+        "size": 6865
+      }
+    },
+    "local_dir": "models/sft_final",
+    "remote_dir": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+    "repo_id": "alwaysgood/dqs-runs",
+    "repo_type": "dataset",
+    "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
+    "total_size_bytes": 10279726920
+  },
+  "source_git_commit": "a46dca1c4a50f9d72842da6c635269a00c09f7b7",
+  "source_post_training_dirty": true
 }

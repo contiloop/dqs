@@ -13,6 +13,8 @@ from typing import Any
 
 import yaml
 
+from download_model import load_model_spec, validate_model_dir
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_OBJECTIVES = {"mpo", "cpo", "dpo"}
@@ -109,6 +111,9 @@ def validate_manifest() -> dict[str, Any]:
         aggregate.update(b"\n")
     if aggregate.hexdigest() != manifest.get("bundle_content_sha256"):
         raise ValueError("bundle aggregate SHA256 does not match manifest")
+    model_manifest, _ = load_model_spec(ROOT)
+    if model_manifest != manifest:
+        raise ValueError("downloadable SFT model contract uses a different manifest")
     return manifest
 
 
@@ -241,42 +246,10 @@ def validate_runtime() -> dict[str, str]:
 
 
 def validate_model(model_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
-    path = model_dir.expanduser().resolve()
-    marker_path = path / "dqs_stage_model.json"
-    if not marker_path.is_file():
-        raise FileNotFoundError(f"SFT provenance marker is missing: {marker_path}")
-    marker = load_json(marker_path)
-    expected_values = {
-        (
-            value["expected_sft"]["run_id"],
-            int(value["expected_sft"]["subset_idx"]),
-            int(value["expected_sft"]["global_step"]),
-        )
-        for value in manifest["objectives"].values()
-    }
-    if len(expected_values) != 1:
-        raise ValueError("objective configs disagree on expected SFT provenance")
-    expected = next(iter(expected_values))
-    observed = (
-        marker.get("run_id"),
-        int(marker.get("subset_idx", -1)),
-        int(marker.get("global_step", -1)),
-    )
-    if marker.get("tuning_mode") != "full" or observed != expected:
-        raise ValueError(
-            f"SFT provenance mismatch: observed={observed!r} expected={expected!r}, "
-            f"tuning_mode={marker.get('tuning_mode')!r}"
-        )
-    required_model_files = ("config.json", "tokenizer_config.json")
-    missing = [name for name in required_model_files if not (path / name).is_file()]
-    if missing or not any(path.glob("*.safetensors")):
-        raise FileNotFoundError(f"SFT final model is incomplete: missing={missing}")
-    return {
-        "path": str(path),
-        "run_id": observed[0],
-        "subset_idx": observed[1],
-        "global_step": observed[2],
-    }
+    model_manifest, spec = load_model_spec(ROOT)
+    if model_manifest != manifest:
+        raise ValueError("supplied manifest does not match the model download contract")
+    return validate_model_dir(model_dir, spec)
 
 
 def main() -> None:

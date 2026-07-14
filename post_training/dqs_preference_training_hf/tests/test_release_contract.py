@@ -54,6 +54,26 @@ class ReleaseContractTest(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], "dqs_preference_release.v1")
         self.assertEqual(manifest["data_access"], "explicit_download_then_local")
 
+    def test_manifest_pins_the_exact_full_sft_model(self) -> None:
+        manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+        model = manifest["sft_model"]
+        self.assertEqual(model["repo_id"], "alwaysgood/dqs-runs")
+        self.assertEqual(model["repo_type"], "dataset")
+        self.assertEqual(
+            model["revision"], "a58b1878988efcecc9a2644f8324bd00131864b5"
+        )
+        self.assertEqual(
+            model["remote_dir"],
+            "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42/checkpoints/final",
+        )
+        self.assertEqual(model["local_dir"], "models/sft_final")
+        self.assertEqual(model["file_count"], 8)
+        self.assertEqual(model["total_size_bytes"], 10_279_726_920)
+        self.assertEqual(
+            model["files"]["model.safetensors"]["sha256"],
+            "304387c31d762065420035d711ebed0eb6e296d0ee28c8918645ed3943fdaf4e",
+        )
+
     def test_training_configs_are_local_only_after_explicit_download(self) -> None:
         for objective in ("mpo", "cpo", "dpo"):
             config = self.load(f"{objective}.yaml")

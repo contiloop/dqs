@@ -37,6 +37,7 @@ cd post_training/dqs_preference_training_hf
 make set
 make validate
 make download-data DOWNLOAD_WORKERS=16
+make download-model MODEL_DOWNLOAD_WORKERS=16
 make validate-data
 make validate-runtime
 make validate-model MODEL_DIR=/workspace/models/sft_final

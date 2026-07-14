@@ -57,6 +57,13 @@ class BuildReleaseTest(unittest.TestCase):
                     f"data/train/{objective}.jsonl",
                 )
             self.assertTrue((output / "scripts" / "download_data.py").is_file())
+            self.assertTrue((output / "scripts" / "download_model.py").is_file())
+            self.assertEqual(manifest["sft_model"]["repo_id"], "alwaysgood/dqs-runs")
+            self.assertEqual(
+                manifest["sft_model"]["revision"],
+                "a58b1878988efcecc9a2644f8324bd00131864b5",
+            )
+            self.assertEqual(manifest["sft_model"]["file_count"], 8)
             completed = subprocess.run(
                 [sys.executable, "scripts/validate_bundle.py"],
                 cwd=output,

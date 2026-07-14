@@ -183,11 +183,6 @@ def require_final_stage_model(model_cfg: Mapping[str, Any]) -> None:
         )
     if not path.is_dir():
         raise ValueError(f"model.name_or_path is not a directory: {path}")
-    if path.name != "final":
-        raise ValueError(
-            "post-training must initialize from the SFT final model directory, "
-            f"not an optimizer checkpoint: {path}"
-        )
     marker = path / "dqs_stage_model.json"
     if not marker.exists():
         raise ValueError(f"missing final-stage provenance marker: {marker}")
