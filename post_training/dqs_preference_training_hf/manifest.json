@@ -46,7 +46,7 @@
     "tests/test_download_model.py": "ab3a9fc779d6c73af864d5ac44e35576f53d359721804be5afcde216340c66e7",
     "tests/test_release_contract.py": "d654a5ff3a8cb2699580bbffd793fe9bbd1eae8cd71cb52aec7ccc8a6e3f16b7"
   },
-  "generated_at_utc": "2026-07-14T14:17:49.714040+00:00",
+  "generated_at_utc": "2026-07-14T14:18:17.841720+00:00",
   "generator": "post_training/scripts/build_release.py",
   "hf_dataset": {
     "repo_id": "alwaysgood/dqs-post-training",
@@ -163,6 +163,6 @@
     "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
     "total_size_bytes": 10279726920
   },
-  "source_git_commit": "3e81c5cb4e024be16f6d618a859aedb22f7b4c53",
-  "source_post_training_dirty": true
+  "source_git_commit": "1c0ce50948d4757e2aaddf393beb455173b343f7",
+  "source_post_training_dirty": false
 }
