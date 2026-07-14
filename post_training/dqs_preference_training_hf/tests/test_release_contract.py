@@ -7,8 +7,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import torch
 import yaml
 
 
@@ -26,6 +28,8 @@ from train_cpo import validate_config as validate_cpo_config  # noqa: E402
 from train_dpo import dpo_config_kwargs, validate_config as validate_dpo_config  # noqa: E402
 from train_mpo import _validate_hard_config  # noqa: E402
 from mpo_masking import MPOPreferenceCollator  # noqa: E402
+from mpo_objective import Setting5LossConfig  # noqa: E402
+from mpo_trainer import compute_setting5_batch_loss  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from validate_bundle import validate_model_eos_profile  # noqa: E402
@@ -161,6 +165,53 @@ class ReleaseContractTest(unittest.TestCase):
         self.assertEqual(batch["chosen_input_ids"].shape, batch["rejected_input_ids"].shape)
         self.assertEqual(batch["rejected_attention_mask"].tolist(), [[True, True, False, False]])
         self.assertEqual(batch["rejected_term_mask"].tolist(), [[False, True, False, False]])
+
+    def test_mpo_release_uses_one_concatenated_preference_forward(self) -> None:
+        class RecordingModel:
+            def __init__(self) -> None:
+                self.embedding = torch.nn.Embedding(8, 5)
+                self.projection = torch.nn.Linear(5, 8, bias=False)
+                self.calls: list[tuple[int, int]] = []
+
+            def __call__(
+                self,
+                *,
+                input_ids,
+                attention_mask,
+                use_cache=False,
+                return_dict=True,
+                logits_to_keep=0,
+            ):
+                del attention_mask, use_cache, return_dict
+                self.calls.append(tuple(input_ids.shape))
+                hidden = self.embedding(input_ids)
+                if not isinstance(logits_to_keep, int):
+                    hidden = hidden.index_select(1, logits_to_keep)
+                return SimpleNamespace(logits=self.projection(hidden))
+
+        preference_batch = MPOPreferenceCollator(pad_token_id=0)(
+            [
+                {
+                    "pair_id": "single-forward-contract",
+                    "chosen_input_ids": [2, 3, 4, 5],
+                    "chosen_completion_mask": [0, 1, 1, 1],
+                    "chosen_term_mask": [0, 0, 1, 1],
+                    "rejected_input_ids": [2, 6],
+                    "rejected_completion_mask": [0, 1],
+                    "rejected_term_mask": [0, 1],
+                }
+            ]
+        )
+        model = RecordingModel()
+        compute_setting5_batch_loss(
+            model=model,
+            batch=preference_batch,
+            config=Setting5LossConfig(),
+            projection="selected",
+            token_logp_backend="torch",
+        )
+
+        self.assertEqual(model.calls, [(2, 4)])
 
     def test_manifest_pins_the_exact_full_sft_model(self) -> None:
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))

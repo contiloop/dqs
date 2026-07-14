@@ -136,9 +136,9 @@ training:
   num_train_epochs: 1
   max_steps: -1
   # Match the source SFT's global optimization batch. Keep the micro-batch at
-  # one because mPO retains chosen and rejected forward graphs simultaneously;
-  # gradient accumulation resolves the same global batch without assuming the
-  # source SFT's single-forward memory footprint.
+  # one because each preference pair expands to two sequences in one
+  # concatenated forward; gradient accumulation resolves the same global batch
+  # without assuming the source SFT's one-sequence memory footprint.
   effective_batch_size: 128
   per_device_train_batch_size: 1
   per_device_eval_batch_size: 1

@@ -18,13 +18,12 @@ try:
     )
     from .mpo_masking import (
         causal_prediction_positions,
-        selected_causal_token_logps,
         selected_token_logp_mean,
     )
     from .mpo_trainer import (
         _accumulate_weighted_metrics,
         _distributed_weighted_metric_means,
-        _forward_logits,
+        _single_forward_preference_token_logps,
     )
 except ImportError:
     from cpo_objective import (
@@ -34,13 +33,12 @@ except ImportError:
     )
     from mpo_masking import (
         causal_prediction_positions,
-        selected_causal_token_logps,
         selected_token_logp_mean,
     )
     from mpo_trainer import (
         _accumulate_weighted_metrics,
         _distributed_weighted_metric_means,
-        _forward_logits,
+        _single_forward_preference_token_logps,
     )
 
 
@@ -68,52 +66,34 @@ def compute_cpo_batch_loss(
     rejected_attention = batch["rejected_attention_mask"]
     rejected_mask = batch["rejected_completion_mask"]
 
-    if chosen_ids.shape != rejected_ids.shape:
-        raise ValueError(
-            "chosen/rejected input tensors must share one padded shape for deterministic "
-            "two-forward gradient checkpoint recomputation"
-        )
-
     chosen_positions = causal_prediction_positions(
         token_mask=chosen_mask, attention_mask=chosen_attention
     )
     rejected_positions = causal_prediction_positions(
         token_mask=rejected_mask, attention_mask=rejected_attention
     )
-    chosen_logits = _forward_logits(
-        model=model,
-        input_ids=chosen_ids,
-        attention_mask=chosen_attention,
-        prediction_positions=chosen_positions,
-    )
-    rejected_logits = _forward_logits(
-        model=model,
-        input_ids=rejected_ids,
-        attention_mask=rejected_attention,
-        prediction_positions=rejected_positions,
-    )
-    chosen_token_logps, chosen_targets = selected_causal_token_logps(
-        logits=chosen_logits,
-        prediction_positions=chosen_positions,
-        input_ids=chosen_ids,
-        backend=token_logp_backend,
+    chosen_token_logps, rejected_token_logps, target_positions = (
+        _single_forward_preference_token_logps(
+            model=model,
+            chosen_ids=chosen_ids,
+            chosen_attention=chosen_attention,
+            chosen_positions=chosen_positions,
+            rejected_ids=rejected_ids,
+            rejected_attention=rejected_attention,
+            rejected_positions=rejected_positions,
+            token_logp_backend=token_logp_backend,
+        )
     )
     chosen_means, chosen_counts = selected_token_logp_mean(
         token_logps=chosen_token_logps,
-        target_positions=chosen_targets,
+        target_positions=target_positions,
         input_ids=chosen_ids,
         token_mask=chosen_mask,
         attention_mask=chosen_attention,
     )
-    rejected_token_logps, rejected_targets = selected_causal_token_logps(
-        logits=rejected_logits,
-        prediction_positions=rejected_positions,
-        input_ids=rejected_ids,
-        backend=token_logp_backend,
-    )
     rejected_means, rejected_counts = selected_token_logp_mean(
         token_logps=rejected_token_logps,
-        target_positions=rejected_targets,
+        target_positions=target_positions,
         input_ids=rejected_ids,
         token_mask=rejected_mask,
         attention_mask=rejected_attention,

@@ -143,6 +143,84 @@ def _forward_logits(
     return logits
 
 
+def _single_forward_preference_token_logps(
+    *,
+    model: Any,
+    chosen_ids: Any,
+    chosen_attention: Any,
+    chosen_positions: Any,
+    rejected_ids: Any,
+    rejected_attention: Any,
+    rejected_positions: Any,
+    token_logp_backend: str,
+) -> tuple[Any, Any, Any]:
+    """Score both preference sides through one model forward and one CE node.
+
+    Gemma4 E-series training uses activation checkpointing around compiled
+    decoder layers.  Running chosen and rejected as separate forwards with
+    different ``logits_to_keep`` lengths can warm a different compiled graph
+    before the first graph is recomputed in backward.  Concatenating along the
+    batch axis gives the model exactly one forward signature.  The union of
+    selected sequence positions is only a projection optimization; each side's
+    independent mask still determines which token log-probabilities contribute
+    to its normalized loss.
+    """
+
+    import torch
+
+    if chosen_ids.ndim != 2 or rejected_ids.ndim != 2:
+        raise ValueError("chosen/rejected input tensors must be two-dimensional")
+    if chosen_ids.shape != rejected_ids.shape:
+        raise ValueError(
+            "chosen/rejected input tensors must share one padded shape for a single "
+            "concatenated preference forward"
+        )
+    if (
+        chosen_attention.shape != chosen_ids.shape
+        or rejected_attention.shape != rejected_ids.shape
+    ):
+        raise ValueError("chosen/rejected attention masks must match their input tensors")
+    if chosen_ids.shape[0] <= 0:
+        raise ValueError("preference forward requires at least one pair")
+    for name, positions in (
+        ("chosen_positions", chosen_positions),
+        ("rejected_positions", rejected_positions),
+    ):
+        if positions.ndim != 1 or positions.numel() == 0:
+            raise ValueError(f"{name} must be a non-empty one-dimensional tensor")
+
+    prediction_positions = torch.unique(
+        torch.cat((chosen_positions, rejected_positions), dim=0),
+        sorted=True,
+    )
+    pair_batch_size = chosen_ids.shape[0]
+    concatenated_ids = torch.cat((chosen_ids, rejected_ids), dim=0)
+    concatenated_attention = torch.cat((chosen_attention, rejected_attention), dim=0)
+    concatenated_logits = _forward_logits(
+        model=model,
+        input_ids=concatenated_ids,
+        attention_mask=concatenated_attention,
+        prediction_positions=prediction_positions,
+    )
+    concatenated_token_logps, target_positions = selected_causal_token_logps(
+        logits=concatenated_logits,
+        prediction_positions=prediction_positions,
+        input_ids=concatenated_ids,
+        backend=token_logp_backend,
+    )
+    expected_batch_size = pair_batch_size * 2
+    if concatenated_token_logps.shape[0] != expected_batch_size:
+        raise RuntimeError(
+            "single preference forward returned an unexpected batch dimension: "
+            f"{concatenated_token_logps.shape[0]} != {expected_batch_size}"
+        )
+    return (
+        concatenated_token_logps[:pair_batch_size],
+        concatenated_token_logps[pair_batch_size:],
+        target_positions,
+    )
+
+
 def compute_setting5_batch_loss(
     *,
     model: Any,
@@ -151,7 +229,7 @@ def compute_setting5_batch_loss(
     projection: str,
     token_logp_backend: str,
 ) -> BatchLossResult:
-    """Run chosen/rejected forwards and compute one setting-5 batch loss.
+    """Run one concatenated preference forward and compute setting-5 loss.
 
     ``projection='selected'`` asks the model to project logits only at the
     required causal positions: all chosen completion positions and only the
@@ -169,12 +247,6 @@ def compute_setting5_batch_loss(
     rejected_attention = batch["rejected_attention_mask"]
     rejected_term_mask = batch["rejected_term_mask"]
 
-    if chosen_ids.shape != rejected_ids.shape:
-        raise ValueError(
-            "chosen/rejected input tensors must share one padded shape for deterministic "
-            "two-forward gradient checkpoint recomputation"
-        )
-
     chosen_positions = causal_prediction_positions(
         token_mask=chosen_completion_mask,
         attention_mask=chosen_attention,
@@ -183,50 +255,37 @@ def compute_setting5_batch_loss(
         token_mask=rejected_term_mask,
         attention_mask=rejected_attention,
     )
-    chosen_logits = _forward_logits(
-        model=model,
-        input_ids=chosen_ids,
-        attention_mask=chosen_attention,
-        prediction_positions=chosen_positions,
+    chosen_token_logps, rejected_token_logps, target_positions = (
+        _single_forward_preference_token_logps(
+            model=model,
+            chosen_ids=chosen_ids,
+            chosen_attention=chosen_attention,
+            chosen_positions=chosen_positions,
+            rejected_ids=rejected_ids,
+            rejected_attention=rejected_attention,
+            rejected_positions=rejected_positions,
+            token_logp_backend=token_logp_backend,
+        )
     )
-    rejected_logits = _forward_logits(
-        model=model,
-        input_ids=rejected_ids,
-        attention_mask=rejected_attention,
-        prediction_positions=rejected_positions,
-    )
-    # Score chosen tokens once. Unsloth's fused CE backward reuses the logits
-    # buffer, so creating separate CE autograd nodes for completion and term
-    # masks over the same tensor would be unsafe.
-    chosen_token_logps, chosen_target_positions = selected_causal_token_logps(
-        logits=chosen_logits,
-        prediction_positions=chosen_positions,
-        input_ids=chosen_ids,
-        backend=token_logp_backend,
-    )
+    # One fused CE node owns the concatenated logits buffer. Chosen SFT, chosen
+    # term mPO, and rejected term mPO remain separate masked reductions.
     chosen_completion_logps, chosen_completion_counts = selected_token_logp_mean(
         token_logps=chosen_token_logps,
-        target_positions=chosen_target_positions,
+        target_positions=target_positions,
         input_ids=chosen_ids,
         token_mask=chosen_completion_mask,
         attention_mask=chosen_attention,
     )
     chosen_term_logps, chosen_term_counts = selected_token_logp_mean(
         token_logps=chosen_token_logps,
-        target_positions=chosen_target_positions,
+        target_positions=target_positions,
         input_ids=chosen_ids,
         token_mask=chosen_term_mask,
         attention_mask=chosen_attention,
     )
-    rejected_token_logps, rejected_target_positions = selected_causal_token_logps(
-        logits=rejected_logits,
-        prediction_positions=rejected_positions,
-        input_ids=rejected_ids,
-        backend=token_logp_backend,
-    )
     rejected_term_logps, rejected_term_counts = selected_token_logp_mean(
         token_logps=rejected_token_logps,
-        target_positions=rejected_target_positions,
+        target_positions=target_positions,
         input_ids=rejected_ids,
         token_mask=rejected_term_mask,
         attention_mask=rejected_attention,

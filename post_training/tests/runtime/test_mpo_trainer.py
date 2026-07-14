@@ -28,6 +28,7 @@ class TinyCausalLM:
         self.module = torch.nn.Module()
         self.module.embedding = torch.nn.Embedding(vocab_size, hidden_size)
         self.module.projection = torch.nn.Linear(hidden_size, vocab_size, bias=False)
+        self.calls: list[dict[str, object]] = []
 
     def __call__(
         self,
@@ -39,6 +40,16 @@ class TinyCausalLM:
         logits_to_keep=0,
     ):
         del attention_mask, use_cache, return_dict
+        self.calls.append(
+            {
+                "input_shape": tuple(input_ids.shape),
+                "logits_to_keep": (
+                    logits_to_keep
+                    if isinstance(logits_to_keep, int)
+                    else logits_to_keep.detach().cpu().tolist()
+                ),
+            }
+        )
         hidden = self.module.embedding(input_ids)
         if not isinstance(logits_to_keep, int):
             hidden = hidden.index_select(1, logits_to_keep)
@@ -92,12 +103,33 @@ def batch():
 
 
 class TrainerLossTest(unittest.TestCase):
-    def test_collator_uses_one_shape_for_both_forward_graphs(self) -> None:
+    def test_collator_uses_one_shape_for_concatenated_forward(self) -> None:
         full_batch = batch()
         self.assertEqual(
             full_batch["chosen_input_ids"].shape,
             full_batch["rejected_input_ids"].shape,
         )
+
+    def test_pair_uses_one_concatenated_model_forward(self) -> None:
+        model = TinyCausalLM()
+        full_batch = batch()
+        compute_setting5_batch_loss(
+            model=model,
+            batch=full_batch,
+            config=Setting5LossConfig(),
+            projection="selected",
+            token_logp_backend="torch",
+        )
+
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(
+            model.calls[0]["input_shape"],
+            (
+                full_batch["chosen_input_ids"].shape[0] * 2,
+                full_batch["chosen_input_ids"].shape[1],
+            ),
+        )
+        self.assertEqual(model.calls[0]["logits_to_keep"], [0, 1, 2])
 
     def test_custom_metrics_are_row_weighted_across_micro_batches(self) -> None:
         buffer: dict[str, list[float]] = {}
@@ -205,7 +237,7 @@ class TrainerLossTest(unittest.TestCase):
         )
         self.assertGreater(grad_norm, 0.0)
 
-    def test_each_forward_uses_exactly_one_token_ce_node(self) -> None:
+    def test_concatenated_forward_uses_exactly_one_token_ce_node(self) -> None:
         model = TinyCausalLM()
         with patch.object(
             mpo_masking,
@@ -221,8 +253,8 @@ class TrainerLossTest(unittest.TestCase):
             )
             result.objective.loss.backward()
 
-        # One node for chosen, shared by SFT and mPO; one for rejected mPO.
-        self.assertEqual(token_scorer.call_count, 2)
+        # One fused node owns the concatenated chosen/rejected logits buffer.
+        self.assertEqual(token_scorer.call_count, 1)
 
     def test_ignored_selected_projection_hard_fails(self) -> None:
         with self.assertRaisesRegex(SelectedLogitsUnsupported, "did not honor"):

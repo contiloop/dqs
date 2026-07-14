@@ -15,6 +15,7 @@ class TinyCausalLM:
         self.module = torch.nn.Module()
         self.module.embedding = torch.nn.Embedding(vocab_size, hidden_size)
         self.module.projection = torch.nn.Linear(hidden_size, vocab_size, bias=False)
+        self.calls: list[tuple[int, int]] = []
 
     def __call__(
         self,
@@ -26,6 +27,7 @@ class TinyCausalLM:
         logits_to_keep=0,
     ):
         del attention_mask, use_cache, return_dict
+        self.calls.append(tuple(input_ids.shape))
         hidden = self.module.embedding(input_ids)
         if not isinstance(logits_to_keep, int):
             hidden = hidden.index_select(1, logits_to_keep)
@@ -63,6 +65,19 @@ def batch():
 
 
 class FullResponseCPOTrainerTest(unittest.TestCase):
+    def test_pair_uses_one_concatenated_model_forward(self) -> None:
+        model = TinyCausalLM()
+        full_batch = batch()
+        compute_cpo_batch_loss(
+            model=model,
+            batch=full_batch,
+            config=FullResponseCPOConfig(),
+            projection="selected",
+            token_logp_backend="torch",
+        )
+
+        self.assertEqual(model.calls, [(4, full_batch["chosen_input_ids"].shape[1])])
+
     def test_selected_projection_matches_full_logits(self) -> None:
         torch.manual_seed(17)
         model = TinyCausalLM()

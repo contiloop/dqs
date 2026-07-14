@@ -27,8 +27,8 @@ class MPOPreferenceCollator:
     """Right-pad both preference sides to one shared forward length.
 
     Chosen and rejected term masks remain independent.  A shared padded tensor
-    shape only prevents two-forward checkpoint/compile graph drift; padding is
-    excluded independently by each side's attention and loss masks.
+    shape allows one concatenated preference forward; padding is excluded
+    independently by each side's attention and loss masks.
     """
 
     def __init__(self, pad_token_id: int) -> None:

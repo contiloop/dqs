@@ -125,9 +125,12 @@ make dry-run
 `make set`은 의도적으로 두 단계다. 먼저 `requirements-gpu.txt`로
 `unsloth==2026.7.2`의 공개 PyPI dependency metadata와 호환되는 환경을 만든 뒤,
 `requirements-transformers-gemma4.txt`를 `--no-deps`로 적용해 최종 런타임을
-`transformers==5.5.3`으로 고정한다. 이 버전은 Gemma-4 E-series의 chosen/rejected
-두 forward가 gradient checkpointing 아래에서 같은 backward에 참여할 때 필요한
-function-scoped shared-KV 경로와 checkpoint-safe keyword 전달을 제공한다.
+`transformers==5.5.3`으로 고정한다. 이 버전은 Gemma-4 E-series의 gradient
+checkpointing에 필요한 function-scoped shared-KV 경로와 checkpoint-safe keyword
+전달을 제공한다. mPO/CPO는 chosen/rejected를 배치 축으로 이어 붙인 `[2B, L]`
+tensor를 정확히 한 번 forward하고, 양쪽에서 필요한 position의 합집합만 projection한
+뒤 각각의 독립 mask로 loss를 정규화한다. 따라서 한 backward 안에서 서로 다른
+compiled forward signature를 만들지 않는다.
 `5.5.0`부터 `5.5.2`까지는 허용하지 않으며,
 `make validate-runtime`이 최종 버전을 fail-closed로 검사한다.
 

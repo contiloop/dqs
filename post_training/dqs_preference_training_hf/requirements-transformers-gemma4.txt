@@ -1,4 +1,5 @@
 # Exact post-bootstrap override. 5.5.2 introduced function-scoped shared K/V,
 # while 5.5.3 also keeps the mutable shared-KV mapping out of checkpoint's
-# positional inputs. Both are required for chosen/rejected forward graphs.
+# positional inputs. Both are required by the checkpoint-safe concatenated
+# Gemma4 preference forward.
 transformers==5.5.3

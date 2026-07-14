@@ -473,7 +473,7 @@ IDs, tokenizer 구현 hash, max length, 실제 학습 tensor의 semantic checksu
 - `train_mpo.py`: 독립 post-training entry point와 smoke hard gate
 - `eval_mpo.py`: final 모델만 허용하는 격리된 post-training eval entry point
 - `mpo_objective.py`: setting-5 loss와 mixing coefficient
-- `mpo_trainer.py`: chosen/rejected forward 및 selected logits 계약
+- `mpo_trainer.py`: chosen/rejected 단일 결합 forward 및 selected logits 계약
 - `mpo_masking.py`: padding, causal shift, independent token normalization
 - `mpo_data.py`: 명시적으로 내려받은 local JSONL 전용 loader와 전수 검증
 - `mpo_model.py`: Unsloth full-tuning loader와 Gemma4 parameter freeze
