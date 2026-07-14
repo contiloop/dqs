@@ -1,5 +1,5 @@
 {
-  "bundle_content_sha256": "00520598e7dfdd31b4f3d8b19aa2e69605dcf0f9dad3838c2092ba28f63fa21b",
+  "bundle_content_sha256": "7c5832c62da9939c53587e3ecae6018b135c8b970d4c2a9c3c857c025d90cda8",
   "bundle_name": "dqs_preference_training",
   "data_access": "explicit_download_then_local",
   "data_mode": "hf",
@@ -15,7 +15,7 @@
     ".dqs-preference-release": "90545a4cfce024520ac9f8350f87a823bb728df7c7601df25612c894423119e9",
     ".gitignore": "122e62b77036ea7309a3f1395690367f5982aa3150ba7957171ce729127597e3",
     "Makefile": "fb336efb547abc2057f0247ce95411b352e248d534d026dc0d6c78041db4b75a",
-    "README.md": "c84c3685e1e437341853c0592cc36583e03d16eb2f04388b1c6aad1defb3f157",
+    "README.md": "6da4c066a52b9d44cc24a15d175ceb6d21211b31d52113a9338a1885b3435ccf",
     "configs/cpo.yaml": "1c92f58382eb1367883c58196803ca8bb7e83736c97effe6171e6028502d3c36",
     "configs/dpo.yaml": "ea1370e26ac27c26e42d18a5471cd27faddab31d3695fe57547c967b3b8769db",
     "configs/mpo.yaml": "ee0c6f830fde2e1d097f0556f5e780d43b6899e1a8dc13e32e2d717bb9388125",
@@ -45,7 +45,7 @@
     "tests/test_download_model.py": "ab3a9fc779d6c73af864d5ac44e35576f53d359721804be5afcde216340c66e7",
     "tests/test_release_contract.py": "f78a1f89bbdd29f033990c30660011afc69eda73c9b8eb976decea5a700418fb"
   },
-  "generated_at_utc": "2026-07-14T11:50:04.119046+00:00",
+  "generated_at_utc": "2026-07-14T11:53:46.052399+00:00",
   "generator": "post_training/scripts/build_release.py",
   "hf_dataset": {
     "repo_id": "alwaysgood/dqs-post-training",
@@ -161,6 +161,6 @@
     "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
     "total_size_bytes": 10279726920
   },
-  "source_git_commit": "598ba4654dfedf8e9f43113e84446a35f9bb2188",
-  "source_post_training_dirty": false
+  "source_git_commit": "7458b550f686150384469d4dafa0800134644231",
+  "source_post_training_dirty": true
 }

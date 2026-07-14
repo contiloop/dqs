@@ -17,6 +17,93 @@ raw golden pairs, 합성·필터링 코드, source review, 분석 보고서, 기
 캐시는 포함하지 않는다. 학습 후 평가는 원래 DQS 평가 파이프라인에서 별도
 output 경로로 수행한다.
 
+## Post-training quick run
+
+아래는 새 외부 GPU 인스턴스에서 시작하는 전체 명령이다. 먼저 CUDA와 호환되는
+PyTorch가 설치된 이미지가 필요하며, 이 패키지는 `2.4 <= torch < 2.11`, CUDA,
+bf16 지원 GPU를 요구한다. `mPO`, `CPO`, `DPO`는 서로 이어서 학습하는 단계가
+아니라 동일한 SFT final 모델에서 각각 시작하는 독립 실험이다.
+
+```bash
+# 1. 코드 받기
+cd /workspace
+git clone --branch codex/post-training --single-branch \
+  https://github.com/contiloop/dqs.git
+cd dqs/post_training/dqs_preference_training_hf
+
+# 2. GPU/PyTorch가 들어 있는 인스턴스 환경을 보존한 venv 만들기
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+make set
+
+# 3. CUDA와 bf16 확인
+nvidia-smi
+python - <<'PY'
+import torch
+
+print("torch:", torch.__version__)
+print("torch CUDA:", torch.version.cuda)
+print("GPU count:", torch.cuda.device_count())
+if not torch.cuda.is_available():
+    raise RuntimeError("CUDA is required")
+if not torch.cuda.is_bf16_supported():
+    raise RuntimeError("this post-training package requires bf16 support")
+PY
+
+# 4. strict online W&B 인증
+wandb login
+
+# 5. 다운로드 전에 코드·환경 테스트
+make validate
+make validate-runtime
+make test
+
+# 6. 공개 HF에서 preference 데이터 3종과 SFT final 모델 1개 다운로드
+df -h .
+make download-all DOWNLOAD_WORKERS=16 MODEL_DOWNLOAD_WORKERS=16
+
+# 7. 다운로드 결과와 세 objective config 검증
+make validate-data
+make validate-model
+make dry-run
+```
+
+이후 실제로 실행할 objective 하나를 고른다. 각 full run은 대응하는 one-step
+smoke receipt가 반드시 먼저 있어야 한다.
+
+```bash
+# mPO
+make smoke-mpo
+make train-mpo
+
+# CPO를 실행할 때는 위 mPO 두 명령 대신 아래 두 명령 사용
+# make smoke-cpo
+# make train-cpo
+
+# DPO를 실행할 때는 위 mPO 두 명령 대신 아래 두 명령 사용
+# make smoke-dpo
+# make train-dpo
+```
+
+여러 GPU를 사용할 때는 smoke와 full train에 완전히 동일한 `LAUNCH`를 넘긴다.
+아래 예시는 mPO 4-GPU 실행이다.
+
+```bash
+make smoke-mpo LAUNCH='torchrun --standalone --nproc_per_node=4'
+make train-mpo  LAUNCH='torchrun --standalone --nproc_per_node=4'
+```
+
+기본 결과 경로는 각각 다음과 같다.
+
+- mPO: `outputs/gemma4_e2b_dqs_mpo_setting5_seed42/final`
+- CPO: `outputs/gemma4_e2b_dqs_cpo_full_response_seed42/final`
+- DPO: `outputs/gemma4_e2b_dqs_dpo_full_response_seed42/final`
+
+HF 데이터와 모델 저장소는 공개이므로 HF 로그인은 필수가 아니다. 입력 SFT
+모델만 10,279,726,920 bytes이고 full-training checkpoint에는 optimizer state도
+저장되므로, 실행 전에 `df -h`로 충분한 디스크 공간을 확인한다.
+
 ## 실행 순서
 
 CUDA/PyTorch는 인스턴스에 맞게 먼저 설치한다. 그 뒤 나머지 고정 버전을

@@ -31,6 +31,9 @@ post_training/
 
 ## 외부 학습
 
+새 인스턴스에서 clone부터 학습까지 이어지는 전체 명령은
+`dqs_preference_training_hf/README.md`의 `Post-training quick run`을 따른다.
+
 ```bash
 cd post_training/dqs_preference_training_hf
 
