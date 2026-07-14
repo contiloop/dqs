@@ -86,6 +86,19 @@ make train-mpo
 # make train-dpo
 ```
 
+Cosine run과 동일한 SFT 초기화 및 loss weight를 유지하면서, warm-up과
+gradient clipping 없이 `5e-6`을 끝까지 사용하는 constant-LR 실험은 별도
+config로 실행한다. 이 config의 `max_grad_norm: 0.0`은 pre-clip norm 로깅은
+유지하지만 optimizer에 전달되는 gradient를 축소하지 않는다.
+
+```bash
+make smoke-mpo MPO_CONFIG=configs/mpo_constant.yaml
+make train-mpo MPO_CONFIG=configs/mpo_constant.yaml
+```
+
+이 config는 기존 cosine run과 output directory 및 W&B run ID가 다르므로
+기존 결과를 resume하거나 덮어쓰지 않는다.
+
 여러 GPU를 사용할 때는 smoke와 full train에 완전히 동일한 `LAUNCH`를 넘긴다.
 아래 예시는 mPO 4-GPU 실행이다.
 
