@@ -98,6 +98,8 @@ class ReleaseContractTest(unittest.TestCase):
                 )
                 self.assertFalse(removed_v5_fields & set(kwargs))
                 self.assertEqual(set(kwargs) - training_parameters, set())
+                self.assertEqual(kwargs["warmup_steps"], 0.1)
+                self.assertNotIn("warmup_ratio", kwargs)
 
             config = self.load("dpo.yaml")
             kwargs = dpo_config_kwargs(
@@ -111,6 +113,19 @@ class ReleaseContractTest(unittest.TestCase):
             )
         self.assertFalse(removed_v5_fields & set(kwargs))
         self.assertEqual(set(kwargs) - training_parameters, dpo_024_parameters_used)
+        self.assertEqual(kwargs["warmup_steps"], 0.1)
+        self.assertNotIn("warmup_ratio", kwargs)
+
+    def test_all_objectives_require_compile_disabled_unsloth(self) -> None:
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("UNSLOTH_RUNTIME_ENV := UNSLOTH_COMPILE_DISABLE=1", makefile)
+        for objective in ("mpo", "cpo", "dpo"):
+            training = self.load(f"{objective}.yaml")["training"]
+            self.assertEqual(training["backend"], "unsloth")
+            self.assertEqual(training["gradient_checkpointing"], "unsloth")
+            self.assertEqual(training["unsloth_compile"], "disabled")
+            self.assertEqual(training["warmup_steps"], 0.1)
+            self.assertNotIn("warmup_ratio", training)
 
     def test_outputs_are_isolated_and_distinct(self) -> None:
         outputs = []

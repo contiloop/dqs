@@ -62,6 +62,7 @@ class NoFallbackContractTest(unittest.TestCase):
             (self.training, "load_in_4bit", True),
             (self.training, "load_in_8bit", True),
             (self.training, "gradient_checkpointing", "true"),
+            (self.training, "unsloth_compile", "enabled"),
             (self.training, "unsloth_fullgraph", True),
             (self.training, "logits_projection", "full"),
             (self.training, "token_logp_backend", "torch"),

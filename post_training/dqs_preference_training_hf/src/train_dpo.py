@@ -272,6 +272,7 @@ def validate_config(config: Mapping[str, Any]) -> None:
             "load_in_8bit",
             "freeze_embeddings",
             "gradient_checkpointing",
+            "unsloth_compile",
             "unsloth_fullgraph",
             "max_seq_length",
             "max_length",
@@ -283,7 +284,7 @@ def validate_config(config: Mapping[str, Any]) -> None:
             "dataset_num_proc",
             "disable_dropout",
             "learning_rate",
-            "warmup_ratio",
+            "warmup_steps",
             "scheduler",
             "optimizer",
             "max_grad_norm",
@@ -375,6 +376,8 @@ def validate_config(config: Mapping[str, Any]) -> None:
         raise ValueError("training.freeze_embeddings must be an explicit boolean")
     if str(training["gradient_checkpointing"]).lower() != "unsloth":
         raise ValueError("DPO gradient_checkpointing must be unsloth")
+    if str(training["unsloth_compile"]).lower() != "disabled":
+        raise ValueError("DPO unsloth_compile must be disabled")
     if bool(training["unsloth_fullgraph"]):
         raise ValueError("DPO unsloth_fullgraph must remain false")
     if str(training["truncation_mode"]) != "keep_end":
@@ -474,7 +477,7 @@ def dpo_config_kwargs(
         "per_device_eval_batch_size": int(training["per_device_eval_batch_size"]),
         "gradient_accumulation_steps": _gradient_accumulation_steps(training),
         "learning_rate": float(training["learning_rate"]),
-        "warmup_ratio": float(training["warmup_ratio"]),
+        "warmup_steps": float(training["warmup_steps"]),
         "lr_scheduler_type": str(training["scheduler"]),
         "optim": str(training["optimizer"]),
         "max_grad_norm": float(training["max_grad_norm"]),

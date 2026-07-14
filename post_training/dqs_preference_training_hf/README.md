@@ -129,10 +129,23 @@ make dry-run
 checkpointing에 필요한 function-scoped shared-KV 경로와 checkpoint-safe keyword
 전달을 제공한다. mPO/CPO는 chosen/rejected를 배치 축으로 이어 붙인 `[2B, L]`
 tensor를 정확히 한 번 forward하고, 양쪽에서 필요한 position의 합집합만 projection한
-뒤 각각의 독립 mask로 loss를 정규화한다. 따라서 한 backward 안에서 서로 다른
-compiled forward signature를 만들지 않는다.
+뒤 각각의 독립 mask로 loss를 정규화한다.
 `5.5.0`부터 `5.5.2`까지는 허용하지 않으며,
 `make validate-runtime`이 최종 버전을 fail-closed로 검사한다.
+
+Gemma-4 E2B의 cross-layer shared-KV는 정확한 gradient를 위해 non-reentrant
+activation checkpointing을 사용한다. pinned Torch/Unsloth 조합에서 compiled
+decoder-layer variant가 backward 재계산 중 다른 순서로 선택되면 forward와 recompute의
+tensor metadata가 달라질 수 있다. 따라서 이 release는
+`training.unsloth_compile: disabled`와 `UNSLOTH_COMPILE_DISABLE=1`을 필수 계약으로
+둔다. 이는 Transformers backend로의 fallback이 아니다. Unsloth `FastModel`, Gemma4
+patch, fused large-vocab CE, full BF16 training과 gradient checkpointing은 그대로
+사용하고 `torch.compile`만 끈다. entry point는 Unsloth가 먼저 import된 경우에도
+조용히 진행하지 않고 재시작을 요구한다.
+
+`warmup_steps: 0.1`의 float 값은 전체 optimizer step의 10%라는 뜻이다. 이전
+`warmup_ratio: 0.1`과 동일한 schedule이며 Transformers v5 deprecation warning만
+제거한다.
 
 `make download-data`는 mPO/CPO/DPO JSONL과 원격 contract를 공개 dataset의 exact
 40-hex commit에서 임시 staging 디렉터리로 모두 내려받는다. 세 objective의 원격

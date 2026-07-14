@@ -151,7 +151,7 @@ def _training_argument_kwargs(
         "per_device_eval_batch_size": int(training_cfg.get("per_device_eval_batch_size", 1)),
         "gradient_accumulation_steps": _gradient_accumulation_steps(training_cfg),
         "learning_rate": float(training_cfg.get("learning_rate", 5e-6)),
-        "warmup_ratio": float(training_cfg.get("warmup_ratio", 0.1)),
+        "warmup_steps": float(training_cfg.get("warmup_steps", 0.1)),
         "lr_scheduler_type": str(training_cfg.get("scheduler", "cosine")),
         "optim": str(training_cfg.get("optimizer", "adamw_torch")),
         "max_grad_norm": float(training_cfg.get("max_grad_norm", 5.0)),

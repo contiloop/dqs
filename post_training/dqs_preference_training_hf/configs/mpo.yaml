@@ -68,12 +68,13 @@ training:
   load_in_8bit: false
   freeze_embeddings: false
   gradient_checkpointing: unsloth
+  unsloth_compile: disabled
   unsloth_fullgraph: false
   max_seq_length: 2908
   logits_projection: selected
   token_logp_backend: unsloth_fused
   learning_rate: 5.0e-06
-  warmup_ratio: 0.1
+  warmup_steps: 0.1
   scheduler: cosine
   optimizer: adamw_torch
   max_grad_norm: 5.0

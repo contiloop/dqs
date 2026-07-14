@@ -107,6 +107,10 @@ training:
   # embeddings; if the LM head shares that weight, the shared head is frozen.
   freeze_embeddings: false
   gradient_checkpointing: unsloth
+  # Gemma4 E2B shared-KV requires non-reentrant checkpointing. Keep Unsloth's
+  # loader, patches and fused kernels, but disable torch.compile so checkpoint
+  # recomputation cannot select a different compiled decoder-layer variant.
+  unsloth_compile: disabled
   # Selected-position tensor lengths vary by row; avoid requiring one static
   # full graph around the whole forward.
   unsloth_fullgraph: false
@@ -124,7 +128,8 @@ training:
   # full-model post-training. The remaining optimizer schedule follows the SFT
   # run, but optimizer/scheduler state is initialized fresh.
   learning_rate: 5.0e-6
-  warmup_ratio: 0.1
+  # Transformers v5 interprets a float below 1 as a ratio of total steps.
+  warmup_steps: 0.1
   scheduler: cosine
   optimizer: adamw_torch
   max_grad_norm: 5.0

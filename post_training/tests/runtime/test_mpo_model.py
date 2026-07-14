@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from mpo_model import prepare_full_finetuning_parameters
+from mpo_model import (
+    _configure_unsloth_compile_contract,
+    prepare_full_finetuning_parameters,
+)
 
 
 def _tiny_gemma4(*, tied: bool) -> Any:
@@ -39,6 +44,18 @@ def _tiny_gemma4(*, tied: bool) -> Any:
 
 
 class FullFinetuningParameterTest(unittest.TestCase):
+    def test_compile_disabled_contract_is_applied_before_unsloth_import(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            _configure_unsloth_compile_contract({"unsloth_compile": "disabled"})
+            self.assertEqual(os.environ["UNSLOTH_COMPILE_DISABLE"], "1")
+
+    def test_compile_contract_has_no_enabled_or_late_import_path(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must be disabled"):
+            _configure_unsloth_compile_contract({"unsloth_compile": "enabled"})
+        with patch.dict(sys.modules, {"unsloth": SimpleNamespace()}):
+            with self.assertRaisesRegex(RuntimeError, "after Unsloth import"):
+                _configure_unsloth_compile_contract({"unsloth_compile": "disabled"})
+
     def test_default_full_text_training_keeps_embeddings_trainable(self) -> None:
         model = _tiny_gemma4(tied=True)
         summary = prepare_full_finetuning_parameters(model, freeze_embeddings=False)

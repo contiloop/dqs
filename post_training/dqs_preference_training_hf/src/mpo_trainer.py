@@ -156,14 +156,12 @@ def _single_forward_preference_token_logps(
 ) -> tuple[Any, Any, Any]:
     """Score both preference sides through one model forward and one CE node.
 
-    Gemma4 E-series training uses activation checkpointing around compiled
-    decoder layers.  Running chosen and rejected as separate forwards with
-    different ``logits_to_keep`` lengths can warm a different compiled graph
-    before the first graph is recomputed in backward.  Concatenating along the
-    batch axis gives the model exactly one forward signature.  The union of
-    selected sequence positions is only a projection optimization; each side's
-    independent mask still determines which token log-probabilities contribute
-    to its normalized loss.
+    Gemma4 E-series training shares K/V tensors across decoder layers while
+    activation checkpointing is active. Concatenating along the batch axis
+    keeps one preference graph alive per loss and avoids overlapping
+    chosen/rejected checkpoint graphs. The union of selected sequence positions
+    is only a projection optimization; each side's independent mask still
+    determines which token log-probabilities contribute to its normalized loss.
     """
 
     import torch

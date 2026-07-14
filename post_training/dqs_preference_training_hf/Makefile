@@ -12,6 +12,7 @@ DOWNLOAD_REPLACE ?= 0
 MODEL_DOWNLOAD_WORKERS ?= 8
 MODEL_REPLACE ?= 0
 SET_MODEL := --set model.name_or_path=$(MODEL_DIR)
+UNSLOTH_RUNTIME_ENV := UNSLOTH_COMPILE_DISABLE=1
 
 .PHONY: set validate download-data download-model download-all validate-data validate-runtime validate-model test \
 	dry-run dry-run-mpo dry-run-cpo dry-run-dpo \
@@ -60,19 +61,19 @@ dry-run-dpo: validate-data
 	PYTHONPATH=src $(PYTHON) src/train_dpo.py --config $(DPO_CONFIG) --dry-run $(SET_MODEL)
 
 smoke-mpo: validate-data validate-runtime validate-model
-	PYTHONPATH=src $(LAUNCH) src/train_mpo.py --config $(MPO_CONFIG) --smoke-step $(SET_MODEL)
+	PYTHONPATH=src $(UNSLOTH_RUNTIME_ENV) $(LAUNCH) src/train_mpo.py --config $(MPO_CONFIG) --smoke-step $(SET_MODEL)
 
 smoke-cpo: validate-data validate-runtime validate-model
-	PYTHONPATH=src $(LAUNCH) src/train_cpo.py --config $(CPO_CONFIG) --smoke-step $(SET_MODEL)
+	PYTHONPATH=src $(UNSLOTH_RUNTIME_ENV) $(LAUNCH) src/train_cpo.py --config $(CPO_CONFIG) --smoke-step $(SET_MODEL)
 
 smoke-dpo: validate-data validate-runtime validate-model
-	PYTHONPATH=src $(LAUNCH) src/train_dpo.py --config $(DPO_CONFIG) --smoke-step $(SET_MODEL)
+	PYTHONPATH=src $(UNSLOTH_RUNTIME_ENV) $(LAUNCH) src/train_dpo.py --config $(DPO_CONFIG) --smoke-step $(SET_MODEL)
 
 train-mpo: validate-data validate-runtime validate-model
-	PYTHONPATH=src $(LAUNCH) src/train_mpo.py --config $(MPO_CONFIG) $(SET_MODEL)
+	PYTHONPATH=src $(UNSLOTH_RUNTIME_ENV) $(LAUNCH) src/train_mpo.py --config $(MPO_CONFIG) $(SET_MODEL)
 
 train-cpo: validate-data validate-runtime validate-model
-	PYTHONPATH=src $(LAUNCH) src/train_cpo.py --config $(CPO_CONFIG) $(SET_MODEL)
+	PYTHONPATH=src $(UNSLOTH_RUNTIME_ENV) $(LAUNCH) src/train_cpo.py --config $(CPO_CONFIG) $(SET_MODEL)
 
 train-dpo: validate-data validate-runtime validate-model
-	PYTHONPATH=src $(LAUNCH) src/train_dpo.py --config $(DPO_CONFIG) $(SET_MODEL)
+	PYTHONPATH=src $(UNSLOTH_RUNTIME_ENV) $(LAUNCH) src/train_dpo.py --config $(DPO_CONFIG) $(SET_MODEL)

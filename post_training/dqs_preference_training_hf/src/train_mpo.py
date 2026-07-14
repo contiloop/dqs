@@ -483,12 +483,13 @@ def _validate_hard_config(
             "load_in_8bit",
             "freeze_embeddings",
             "gradient_checkpointing",
+            "unsloth_compile",
             "unsloth_fullgraph",
             "max_seq_length",
             "logits_projection",
             "token_logp_backend",
             "learning_rate",
-            "warmup_ratio",
+            "warmup_steps",
             "scheduler",
             "optimizer",
             "max_grad_norm",
@@ -547,6 +548,10 @@ def _validate_hard_config(
         raise ValueError("training.freeze_embeddings must be an explicit boolean")
     if str(training_cfg.get("gradient_checkpointing", "")).strip().lower() != "unsloth":
         raise ValueError("training.gradient_checkpointing must be unsloth")
+    if str(training_cfg.get("unsloth_compile", "")).strip().lower() != "disabled":
+        raise ValueError(
+            "training.unsloth_compile must be disabled for Gemma4 checkpoint safety"
+        )
     if bool(training_cfg.get("unsloth_fullgraph", True)):
         raise ValueError("training.unsloth_fullgraph must be false for variable selected-position tensors")
     if str(training_cfg.get("logits_projection", "")).strip().lower() != "selected":

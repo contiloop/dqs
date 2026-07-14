@@ -61,6 +61,7 @@ class TrainDPOConfigTest(unittest.TestCase):
             ("reference", "precompute_before_resume_restore", False),
             ("training", "load_in_4bit", True),
             ("training", "gradient_checkpointing", False),
+            ("training", "unsloth_compile", "enabled"),
             ("training", "use_logits_to_keep", False),
             ("training", "disable_dropout", False),
             ("training", "padding_free", True),
@@ -112,6 +113,8 @@ class TrainDPOConfigTest(unittest.TestCase):
         self.assertIsNone(kwargs["rpo_alpha"])
         self.assertEqual(kwargs["loss_type"], ["sigmoid"])
         self.assertEqual(kwargs["learning_rate"], 5e-6)
+        self.assertEqual(kwargs["warmup_steps"], 0.1)
+        self.assertNotIn("warmup_ratio", kwargs)
         self.assertEqual(kwargs["gradient_accumulation_steps"], 128)
 
     def test_smoke_receipt_must_cover_the_whole_smoke_batch(self) -> None:

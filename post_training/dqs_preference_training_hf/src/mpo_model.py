@@ -220,7 +220,41 @@ def require_final_stage_model(model_cfg: Mapping[str, Any]) -> None:
         )
 
 
+def _configure_unsloth_compile_contract(training_cfg: Mapping[str, Any]) -> None:
+    """Disable Unsloth torch.compile before the package is imported.
+
+    Gemma4 E-series forces non-reentrant activation checkpointing so its
+    cross-layer shared K/V tensors remain gradient-connected.  Under the
+    pinned Torch/Unsloth runtime, compiled decoder-layer variants can be
+    selected in a different order during checkpoint recomputation, which
+    makes saved and recomputed tensor metadata diverge.  This is the required
+    execution mode for this release, not a runtime fallback.
+    """
+
+    mode = str(training_cfg.get("unsloth_compile", "")).strip().lower()
+    if mode != "disabled":
+        raise ValueError(
+            "training.unsloth_compile must be disabled for checkpoint-safe "
+            "Gemma4 E-series full training"
+        )
+    loaded = sorted(
+        name
+        for name in sys.modules
+        if name == "unsloth"
+        or name.startswith("unsloth.")
+        or name == "unsloth_zoo"
+        or name.startswith("unsloth_zoo.")
+    )
+    if loaded:
+        raise RuntimeError(
+            "training.unsloth_compile=disabled was applied after Unsloth import; "
+            "restart the process so the compile contract can take effect"
+        )
+    os.environ["UNSLOTH_COMPILE_DISABLE"] = "1"
+
+
 def _load_unsloth(model_cfg: Mapping[str, Any], training_cfg: Mapping[str, Any]) -> tuple[Any, Any, str]:
+    _configure_unsloth_compile_contract(training_cfg)
     # Set this before importing Unsloth. Its compiler otherwise may replace
     # logits with EMPTY_LOGITS even when the custom trainer needs raw logits.
     os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
@@ -234,6 +268,18 @@ def _load_unsloth(model_cfg: Mapping[str, Any], training_cfg: Mapping[str, Any])
         raise RuntimeError(
             "Unsloth is required. Install the pinned GPU environment; no alternate backend is allowed."
         ) from exc
+    try:
+        from unsloth_zoo.temporary_patches.common import (
+            UNSLOTH_COMPILE_DISABLE as compile_disabled,
+        )
+    except (ImportError, AttributeError) as exc:
+        raise RuntimeError(
+            "the pinned Unsloth Zoo compile-state contract is unavailable"
+        ) from exc
+    if compile_disabled is not True:
+        raise RuntimeError(
+            "Unsloth Zoo did not observe UNSLOTH_COMPILE_DISABLE=1 at import time"
+        )
 
     api_name = str(model_cfg["unsloth_model_api"]).strip().lower()
     if api_name != "fast_model":
@@ -292,6 +338,7 @@ def load_model_and_tokenizer(
     return model, tokenizer, {
         "backend": backend,
         "model_api": api_name,
+        "unsloth_compile": str(training_cfg["unsloth_compile"]),
         "pad_token_id": int(tokenizer_backend.pad_token_id),
         "eos_token_id": int(tokenizer_backend.eos_token_id),
         "tokenizer_length": len(tokenizer_backend),

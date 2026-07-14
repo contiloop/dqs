@@ -1,5 +1,5 @@
 {
-  "bundle_content_sha256": "73f940b246b91e9e10e680234342dea2a8a47fedfa516c8c2c249c146d1c2c08",
+  "bundle_content_sha256": "e9b03b8630e2b16069b8b23d5b0aec15f73c91a130832dc716b752b252f1ecf8",
   "bundle_name": "dqs_preference_training",
   "data_access": "explicit_download_then_local",
   "data_mode": "hf",
@@ -14,11 +14,11 @@
   "files": {
     ".dqs-preference-release": "90545a4cfce024520ac9f8350f87a823bb728df7c7601df25612c894423119e9",
     ".gitignore": "ae76f6e22da63349dbfe455b05327a588a24f4ba84e78dff5095ff9decf078cc",
-    "Makefile": "92e5e0f0ef3bcc54b1e853092260f9be5af97348815e49cb1c14e946155eac23",
-    "README.md": "1645c8608dc79f2b2bd7ecc26f129a720dfaf4479917741d830580c4a7479b0f",
-    "configs/cpo.yaml": "1c92f58382eb1367883c58196803ca8bb7e83736c97effe6171e6028502d3c36",
-    "configs/dpo.yaml": "ea1370e26ac27c26e42d18a5471cd27faddab31d3695fe57547c967b3b8769db",
-    "configs/mpo.yaml": "ee0c6f830fde2e1d097f0556f5e780d43b6899e1a8dc13e32e2d717bb9388125",
+    "Makefile": "af849a250604c1fa562b8d001910e2fd92ac4905a2ea158290155e62376f6024",
+    "README.md": "bb7756cd7acc1fa5789576d94b559e78de1616ebb2dabd569dd323a36d4311f7",
+    "configs/cpo.yaml": "754228bdfc0b864362723dc3781f923b0884f69e41c6d46cb8bddece0df2f937",
+    "configs/dpo.yaml": "5825b1ea640c833b71340f1142c555f1bec2590aae0d2f4cbd62b915fe557932",
+    "configs/mpo.yaml": "8a2c8c27c2f53694d42959e2d49a95f4241c9b1a0f8461c327713569d7c9caf5",
     "data/contracts/cpo.json": "39bd94cf7a5b484a5d66848f63caa24c68f77e08994b45def981c73491637084",
     "data/contracts/dpo.json": "5a2d382745fecebe9397fd499c7d073c7f22f5991f8a9ea7fcec8d1b46231f25",
     "data/contracts/mpo.json": "a2e775e86631e1608f4efdacc1e1e84e4302cbdcebd379c804fca79da9f995be",
@@ -34,19 +34,19 @@
     "src/full_preference_data.py": "2fa96334b049a653bd9303be23a5ac7dae4645bc71c331e0c1fb3142d5bb7834",
     "src/mpo_data.py": "d7101dac83a18f00c7195fbc318f0ec3d50a534e312c4309eeeb8b879c175889",
     "src/mpo_masking.py": "2a6850de2b8889f15112fe4fafd9426c9808234061175816120c11a577e69e09",
-    "src/mpo_model.py": "55faa890c211c5291af8e73952a561ea95bb33bdec7c77e498841e8b8affa412",
+    "src/mpo_model.py": "6000d209b88c540147685156fd90c0117aa9ae517b9582de7e9dd82185b8afd7",
     "src/mpo_objective.py": "7f348953e1e1aa5ff7bb1eb8d1371fe081dbe07487bba3cc4000e03319873a20",
-    "src/mpo_trainer.py": "83f9ae4c78300c080d5a136eb09cf9aa2554310b22d9d69cf87f047d2bdf0f9e",
+    "src/mpo_trainer.py": "6ef0e0664ee1384c6ac50d5b6e5a324e5892f26def3dce982eee63bcfd2d0e9e",
     "src/mpo_wandb.py": "1c95cbaef19f34a692426f62b13b0a5f2dc62995979b1aa40da3c89a57b56a65",
-    "src/preference_runtime.py": "588ebdcccdab362aaeed16cc42e9c36b4e4b91b8a1b9284767f9134dd28ffe0f",
-    "src/train_cpo.py": "8b2a42ef603958e02ce0bb0b74699856f664f8c9f68544c5aa4bfe4b1b9c8eac",
-    "src/train_dpo.py": "676a88df648a68554ee3f8855a205251f844eff5f67f167edbcc1fe40a4c6acd",
-    "src/train_mpo.py": "eba0bfc893c6e4e3358eae51b70a5aee1493513c89e73a81c9bcf6e31747d495",
+    "src/preference_runtime.py": "2c8e6ed7b53301596088dea5367775e928a44031a70f0b8a46259b761eee816c",
+    "src/train_cpo.py": "1c6539bfb0859a3136f398bd6ee1fe2ae946b989abc27deda52d89bb56533c28",
+    "src/train_dpo.py": "6a622b3c6cdc282b1bf269bccd2346a66193982033d8f2811c422df4c742b951",
+    "src/train_mpo.py": "60667eaea2f137e84816a793e17df31c512cc78d25afb1f1a63290dfbc43144b",
     "tests/test_download_data.py": "b61b9df115671e510735beb71487ea4ce3db582b04036a39922152ee63752503",
     "tests/test_download_model.py": "ab3a9fc779d6c73af864d5ac44e35576f53d359721804be5afcde216340c66e7",
-    "tests/test_release_contract.py": "9f51211e12f48774d1a9d88c69b46f1b411902e50ddb05797095442838494ff5"
+    "tests/test_release_contract.py": "b965c3793ad009bae20d92612b26f05ecfd0245c519e506964503bd87b3a14cd"
   },
-  "generated_at_utc": "2026-07-14T14:46:06.691695+00:00",
+  "generated_at_utc": "2026-07-14T14:56:16.649647+00:00",
   "generator": "post_training/scripts/build_release.py",
   "hf_dataset": {
     "repo_id": "alwaysgood/dqs-post-training",
@@ -163,6 +163,6 @@
     "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
     "total_size_bytes": 10279726920
   },
-  "source_git_commit": "6e4069b371e2475c0efacae9d702b760ecde3d82",
-  "source_post_training_dirty": false
+  "source_git_commit": "a55172321d5ed43692ab6738bf6a82490d89597d",
+  "source_post_training_dirty": true
 }

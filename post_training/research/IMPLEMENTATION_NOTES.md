@@ -56,13 +56,13 @@ L = lambda_sft * L_SFT(y+) + lambda_mpo * L_mPO(y+, y-)
 5. 모든 출력은 `post_training/outputs/` 아래에 저장한다.
 
 기본 optimizer hyperparameter는 이 모델을 만든 실제 iterative full-SFT snapshot을
-기준으로 한다. warmup ratio `0.1`, cosine scheduler, AdamW, max gradient norm
+기준으로 한다. float `warmup_steps: 0.1`(전체 step의 10%), cosine scheduler, AdamW, max gradient norm
 `5.0`, weight decay `0.0`, effective batch size `128`, 1 epoch은 유지하되, localized
 full-model post-training의 peak learning rate는 SFT의 `2e-5`보다 4배 낮은 `5e-6`을
 쓴다. 이는 optimizer state를 재개한다는 뜻이 아니다. post-training은 새 optimizer와
-새 scheduler를 시작한다. mPO는 chosen/rejected graph를 함께 유지하므로 per-device
-micro-batch는 SFT의 `4` 대신 `1`을 쓰고 gradient accumulation으로 같은 global
-batch를 만든다.
+새 scheduler를 시작한다. mPO는 chosen/rejected를 `[2B, L]` 단일 결합 forward로
+처리하므로 pair 기준 per-device micro-batch는 SFT의 `4` 대신 `1`을 쓰고 gradient
+accumulation으로 같은 global batch를 만든다.
 
 따라서 post-training loss 안의 `L_SFT(y+)`는 “기존 SFT를 한 번 더 실행”한다는 뜻이 아니다. 같은 preference batch에서 전체 번역 품질을 붙잡는 regularizer이며, mPO와 **동시에 한 optimizer step**으로 계산된다.
 
@@ -268,13 +268,17 @@ training:
 자동 backend 전환, full-sequence logits fallback, PyTorch CE fallback, BF16→FP16 전환은
 없다. `FastModel.from_pretrained`에는 `full_finetuning=True`, `return_logits=True`,
 `load_in_4bit=False`, `load_in_8bit=False`를 전달한다. 지원하지 않는 인자를 조용히 빼는
-호환성 경로도 없다. 또한 import 전에 `UNSLOTH_RETURN_LOGITS=1`을 설정한다. mPO/CPO의
+호환성 경로도 없다. 또한 import 전에 `UNSLOTH_RETURN_LOGITS=1`과
+`UNSLOTH_COMPILE_DISABLE=1`을 설정한다. 후자는 Gemma4 E2B의 non-reentrant activation
+checkpoint recomputation이 다른 compiled decoder-layer variant를 선택해 metadata가
+달라지는 것을 막는 필수 실행 계약이다. Unsloth loader, Gemma4 patch, fused kernel과
+gradient checkpointing은 유지되며 backend fallback은 없다. mPO/CPO의
 per-token log-probability는 Unsloth large-vocab fused CE를 사용한다. DPO는 TRL의 표준
 completion log-prob 계산을 유지하되 `logits_to_keep`로 prompt 구간을 projection에서
 제외한다. 즉 DPO는 completion suffix 전체를 계산하며 term-only mPO projection과는 다르다.
 
 현재 repo pin인 `unsloth==2026.7.2`, `unsloth-zoo==2026.7.2`,
-`transformers==5.5.0`, `trl==0.24.0` 소스를 확인한 결과:
+`transformers==5.5.3`, `trl==0.24.0` 소스를 확인한 결과:
 
 - `FastModel.from_pretrained`는 `full_finetuning`과 `return_logits`를 받는다.
 - Transformers 5.5의 `Gemma4ForConditionalGeneration.forward`는 tensor `logits_to_keep`를 받고 해당 hidden-state 위치에만 LM head를 적용한다.

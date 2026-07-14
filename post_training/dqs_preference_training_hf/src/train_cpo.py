@@ -156,12 +156,13 @@ def validate_config(config: Mapping[str, Any]) -> None:
             "load_in_8bit",
             "freeze_embeddings",
             "gradient_checkpointing",
+            "unsloth_compile",
             "unsloth_fullgraph",
             "max_seq_length",
             "logits_projection",
             "token_logp_backend",
             "learning_rate",
-            "warmup_ratio",
+            "warmup_steps",
             "scheduler",
             "optimizer",
             "max_grad_norm",
@@ -190,6 +191,12 @@ def validate_config(config: Mapping[str, Any]) -> None:
         raise ValueError("CPO is full bfloat16 training, not quantized training")
     if type(training["freeze_embeddings"]) is not bool:
         raise ValueError("training.freeze_embeddings must be an explicit boolean")
+    if str(training["gradient_checkpointing"]).lower() != "unsloth":
+        raise ValueError("CPO gradient_checkpointing must be unsloth")
+    if str(training["unsloth_compile"]).lower() != "disabled":
+        raise ValueError("CPO unsloth_compile must be disabled")
+    if bool(training["unsloth_fullgraph"]):
+        raise ValueError("CPO unsloth_fullgraph must remain false")
     if training["logits_projection"] != "selected":
         raise ValueError("CPO selected-logit projection is mandatory")
     if training["token_logp_backend"] != "unsloth_fused":
