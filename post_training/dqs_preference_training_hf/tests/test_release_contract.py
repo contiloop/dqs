@@ -56,6 +56,19 @@ class ReleaseContractTest(unittest.TestCase):
         validate_cpo_config(self.load("cpo.yaml"))
         validate_dpo_config(self.load("dpo.yaml"))
 
+    def test_all_mpo_variants_satisfy_the_hard_config_contract(self) -> None:
+        for name in ("mpo.yaml", "mpo_constant.yaml", "mpo_constant_lambda5.yaml"):
+            with self.subTest(config=name):
+                mpo = self.load(name)
+                _validate_hard_config(
+                    run_cfg=mpo["run"],
+                    model_cfg=mpo["model"],
+                    data_cfg=mpo["data"],
+                    loss_values=mpo["loss"],
+                    training_cfg=mpo["training"],
+                    logging_cfg=mpo["logging"],
+                )
+
     def test_argument_kwargs_match_the_pinned_v5_constructor_surfaces(self) -> None:
         from transformers import TrainingArguments
 
