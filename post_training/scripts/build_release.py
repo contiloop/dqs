@@ -187,6 +187,7 @@ def _ensure_inputs(*, data_mode: str) -> None:
     required_paths = [
         *(RUNTIME_SOURCE_ROOT / name for name in RUNTIME_SOURCE_FILES),
         PACKAGE_ROOT / "requirements-gpu.txt",
+        PACKAGE_ROOT / "requirements-transformers-gemma4.txt",
         DEPLOYMENT_ASSETS / "Makefile",
         DEPLOYMENT_ASSETS / "README.md",
         DEPLOYMENT_ASSETS / "scripts" / "download_data.py",
@@ -302,7 +303,7 @@ def _write_text_files(staging: Path) -> None:
     )
     (staging / ".gitignore").write_text(
         "__pycache__/\n*.py[cod]\n.venv/\n.cache/\ndata/train/*.jsonl\n"
-        "models/\noutputs/\nwandb/\n",
+        "models/\noutputs/\nwandb/\nunsloth_compiled_cache/\n",
         encoding="utf-8",
     )
     (staging / "src" / "__init__.py").write_text(
@@ -316,6 +317,10 @@ def _copy_runtime(staging: Path) -> None:
     shutil.copy2(
         PACKAGE_ROOT / "requirements-gpu.txt",
         staging / "requirements-gpu.txt",
+    )
+    shutil.copy2(
+        PACKAGE_ROOT / "requirements-transformers-gemma4.txt",
+        staging / "requirements-transformers-gemma4.txt",
     )
 
 
@@ -491,6 +496,7 @@ def _write_manifest(
         "sft_model": _sft_model_manifest(objectives),
         "objectives": objectives,
         "runtime_requirements": "requirements-gpu.txt",
+        "runtime_override_requirements": "requirements-transformers-gemma4.txt",
         "files": hashes,
         "bundle_content_sha256": content_sha,
         "excluded_scopes": [

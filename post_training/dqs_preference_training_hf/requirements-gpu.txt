@@ -1,4 +1,6 @@
-# Source-verified API contract for Gemma4 mPO/CPO and Unsloth-patched DPO.
+# Resolver-compatible bootstrap for the strict runtime installed by `make set`.
+# Unsloth 2026.7.2 metadata caps Transformers at 5.5.0, so `make set` resolves
+# this file first and then applies requirements-transformers-gemma4.txt exactly.
 # Install into a CUDA image with 2.4 <= torch < 2.11; torch must match CUDA.
 transformers==5.5.0
 unsloth==2026.7.2

@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from preference_runtime import (  # noqa: E402
     POST_TRAINING_ROOT,
+    REQUIRED_RUNTIME_VERSIONS,
     REPO_ROOT,
     _output_dir,
     _training_argument_kwargs,
@@ -120,6 +121,27 @@ class ReleaseContractTest(unittest.TestCase):
         self.assertEqual(set(manifest["objectives"]), {"mpo", "cpo", "dpo"})
         self.assertEqual(manifest["schema_version"], "dqs_preference_release.v1")
         self.assertEqual(manifest["data_access"], "explicit_download_then_local")
+
+    def test_gemma4_transformers_override_is_explicit_and_exact(self) -> None:
+        bootstrap = (ROOT / "requirements-gpu.txt").read_text(encoding="utf-8")
+        override = (ROOT / "requirements-transformers-gemma4.txt").read_text(
+            encoding="utf-8"
+        )
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+
+        self.assertIn("transformers==5.5.0", bootstrap)
+        self.assertIn("transformers==5.5.2", override)
+        self.assertEqual(REQUIRED_RUNTIME_VERSIONS["transformers"], "5.5.2")
+        self.assertIn(
+            "pip install --no-deps --force-reinstall -r "
+            "$(TRANSFORMERS_OVERRIDE_REQUIREMENTS)",
+            makefile,
+        )
+        self.assertEqual(
+            manifest["runtime_override_requirements"],
+            "requirements-transformers-gemma4.txt",
+        )
 
     def test_manifest_pins_the_exact_full_sft_model(self) -> None:
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))

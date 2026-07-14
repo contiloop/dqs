@@ -1,0 +1,4 @@
+# Exact post-bootstrap override. Unsloth's Gemma-4 E-series patch requires the
+# function-scoped shared-KV implementation in Transformers >=5.5.2 when one
+# objective performs chosen and rejected forwards before a single backward.
+transformers==5.5.2

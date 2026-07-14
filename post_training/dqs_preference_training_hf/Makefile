@@ -6,6 +6,7 @@ MODEL_DIR ?= models/sft_final
 MPO_CONFIG ?= configs/mpo.yaml
 CPO_CONFIG ?= configs/cpo.yaml
 DPO_CONFIG ?= configs/dpo.yaml
+TRANSFORMERS_OVERRIDE_REQUIREMENTS ?= requirements-transformers-gemma4.txt
 DOWNLOAD_WORKERS ?= 8
 DOWNLOAD_REPLACE ?= 0
 MODEL_DOWNLOAD_WORKERS ?= 8
@@ -19,6 +20,7 @@ SET_MODEL := --set model.name_or_path=$(MODEL_DIR)
 
 set:
 	$(PYTHON) -m pip install -r requirements-gpu.txt
+	$(PYTHON) -m pip install --no-deps --force-reinstall -r $(TRANSFORMERS_OVERRIDE_REQUIREMENTS)
 
 validate:
 	$(PYTHON) scripts/validate_bundle.py
