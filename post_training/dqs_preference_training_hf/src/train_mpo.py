@@ -73,7 +73,7 @@ REQUIRED_RUNTIME_VERSIONS = {
     "pyyaml": "6.0.3",
     "tokenizers": "0.22.2",
     "trl": "0.24.0",
-    "transformers": "5.5.2",
+    "transformers": "5.5.3",
     "unsloth": "2026.7.2",
     "unsloth-zoo": "2026.7.2",
     "wandb": WANDB_REQUIRED_VERSION,

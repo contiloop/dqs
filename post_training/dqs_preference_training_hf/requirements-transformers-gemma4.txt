@@ -1,4 +1,4 @@
-# Exact post-bootstrap override. Unsloth's Gemma-4 E-series patch requires the
-# function-scoped shared-KV implementation in Transformers >=5.5.2 when one
-# objective performs chosen and rejected forwards before a single backward.
-transformers==5.5.2
+# Exact post-bootstrap override. 5.5.2 introduced function-scoped shared K/V,
+# while 5.5.3 also keeps the mutable shared-KV mapping out of checkpoint's
+# positional inputs. Both are required for chosen/rejected forward graphs.
+transformers==5.5.3

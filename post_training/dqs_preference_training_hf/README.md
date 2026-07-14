@@ -125,9 +125,10 @@ make dry-run
 `make set`은 의도적으로 두 단계다. 먼저 `requirements-gpu.txt`로
 `unsloth==2026.7.2`의 공개 PyPI dependency metadata와 호환되는 환경을 만든 뒤,
 `requirements-transformers-gemma4.txt`를 `--no-deps`로 적용해 최종 런타임을
-`transformers==5.5.2`로 고정한다. 이 버전은 Gemma-4 E-series의 chosen/rejected
+`transformers==5.5.3`으로 고정한다. 이 버전은 Gemma-4 E-series의 chosen/rejected
 두 forward가 gradient checkpointing 아래에서 같은 backward에 참여할 때 필요한
-function-scoped shared-KV 경로를 제공한다. `5.5.0` 또는 `5.5.1`은 허용하지 않으며,
+function-scoped shared-KV 경로와 checkpoint-safe keyword 전달을 제공한다.
+`5.5.0`부터 `5.5.2`까지는 허용하지 않으며,
 `make validate-runtime`이 최종 버전을 fail-closed로 검사한다.
 
 `make download-data`는 mPO/CPO/DPO JSONL과 원격 contract를 공개 dataset의 exact

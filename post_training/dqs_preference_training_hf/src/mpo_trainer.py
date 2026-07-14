@@ -169,6 +169,12 @@ def compute_setting5_batch_loss(
     rejected_attention = batch["rejected_attention_mask"]
     rejected_term_mask = batch["rejected_term_mask"]
 
+    if chosen_ids.shape != rejected_ids.shape:
+        raise ValueError(
+            "chosen/rejected input tensors must share one padded shape for deterministic "
+            "two-forward gradient checkpoint recomputation"
+        )
+
     chosen_positions = causal_prediction_positions(
         token_mask=chosen_completion_mask,
         attention_mask=chosen_attention,

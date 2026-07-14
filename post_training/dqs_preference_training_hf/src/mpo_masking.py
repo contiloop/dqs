@@ -24,19 +24,34 @@ def _validate_binary_mask(values: Sequence[int], *, name: str, expected: int) ->
 
 
 class MPOPreferenceCollator:
-    """Right-pad chosen and rejected sequences while zero-padding every mask."""
+    """Right-pad both preference sides to one shared forward length.
+
+    Chosen and rejected term masks remain independent.  A shared padded tensor
+    shape only prevents two-forward checkpoint/compile graph drift; padding is
+    excluded independently by each side's attention and loss masks.
+    """
 
     def __init__(self, pad_token_id: int) -> None:
         self.pad_token_id = int(pad_token_id)
 
-    def _pad_side(self, features: Sequence[Mapping[str, Any]], side: str) -> dict[str, Any]:
+    def _pad_side(
+        self,
+        features: Sequence[Mapping[str, Any]],
+        side: str,
+        *,
+        max_length: int,
+    ) -> dict[str, Any]:
         import torch
 
         ids_field = f"{side}_input_ids"
         sequences = [[int(value) for value in feature[ids_field]] for feature in features]
         if not sequences or any(not sequence for sequence in sequences):
             raise ValueError(f"{ids_field} must contain non-empty sequences")
-        max_length = max(len(sequence) for sequence in sequences)
+        side_max_length = max(len(sequence) for sequence in sequences)
+        if max_length < side_max_length:
+            raise ValueError(
+                f"shared max_length={max_length} is shorter than {ids_field}={side_max_length}"
+            )
 
         input_ids: list[list[int]] = []
         attention_mask: list[list[int]] = []
@@ -62,9 +77,14 @@ class MPOPreferenceCollator:
     def __call__(self, features: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         if not features:
             raise ValueError("MPOPreferenceCollator received an empty batch")
+        shared_max_length = max(
+            len(feature[f"{side}_input_ids"])
+            for feature in features
+            for side in ("chosen", "rejected")
+        )
         batch: dict[str, Any] = {"pair_id": [str(feature["pair_id"]) for feature in features]}
-        batch.update(self._pad_side(features, "chosen"))
-        batch.update(self._pad_side(features, "rejected"))
+        batch.update(self._pad_side(features, "chosen", max_length=shared_max_length))
+        batch.update(self._pad_side(features, "rejected", max_length=shared_max_length))
         return batch
 
 

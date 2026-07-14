@@ -44,7 +44,7 @@ REQUIRED_RUNTIME_VERSIONS = {
     "pyyaml": "6.0.3",
     "tokenizers": "0.22.2",
     "trl": "0.24.0",
-    "transformers": "5.5.2",
+    "transformers": "5.5.3",
     "unsloth": "2026.7.2",
     "unsloth-zoo": "2026.7.2",
     "wandb": WANDB_REQUIRED_VERSION,
@@ -211,7 +211,7 @@ def _training_arguments(
         has_eval=has_eval,
         smoke_step=smoke_step,
     )
-    # This is the exact Transformers 5.5.2 constructor surface. In v5,
+    # This is the exact Transformers 5.5.3 constructor surface. In v5,
     # overwrite_output_dir was removed and model saving is safetensors-only,
     # so save_safetensors was removed as well. Never signature-filter kwargs.
     return TrainingArguments(**kwargs)

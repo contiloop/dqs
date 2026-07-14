@@ -92,6 +92,13 @@ def batch():
 
 
 class TrainerLossTest(unittest.TestCase):
+    def test_collator_uses_one_shape_for_both_forward_graphs(self) -> None:
+        full_batch = batch()
+        self.assertEqual(
+            full_batch["chosen_input_ids"].shape,
+            full_batch["rejected_input_ids"].shape,
+        )
+
     def test_custom_metrics_are_row_weighted_across_micro_batches(self) -> None:
         buffer: dict[str, list[float]] = {}
         _accumulate_weighted_metrics(buffer, {"train/loss/total": 3.0}, weight=2)

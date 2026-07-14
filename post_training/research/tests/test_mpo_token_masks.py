@@ -241,6 +241,7 @@ class MaskedLossTest(unittest.TestCase):
         self.assertEqual(batch["chosen_completion_mask"].tolist(), [[False, True, True], [False, True, False]])
         self.assertEqual(batch["chosen_term_mask"].tolist(), [[False, False, True], [False, True, False]])
         self.assertEqual(batch["rejected_attention_mask"].tolist(), [[True, True, False], [True, True, True]])
+        self.assertEqual(batch["chosen_input_ids"].shape, batch["rejected_input_ids"].shape)
 
     def test_causal_shift_and_per_row_normalization(self) -> None:
         import torch

@@ -25,6 +25,7 @@ from preference_runtime import (  # noqa: E402
 from train_cpo import validate_config as validate_cpo_config  # noqa: E402
 from train_dpo import dpo_config_kwargs, validate_config as validate_dpo_config  # noqa: E402
 from train_mpo import _validate_hard_config  # noqa: E402
+from mpo_masking import MPOPreferenceCollator  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from validate_bundle import validate_model_eos_profile  # noqa: E402
@@ -131,8 +132,8 @@ class ReleaseContractTest(unittest.TestCase):
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
 
         self.assertIn("transformers==5.5.0", bootstrap)
-        self.assertIn("transformers==5.5.2", override)
-        self.assertEqual(REQUIRED_RUNTIME_VERSIONS["transformers"], "5.5.2")
+        self.assertIn("transformers==5.5.3", override)
+        self.assertEqual(REQUIRED_RUNTIME_VERSIONS["transformers"], "5.5.3")
         self.assertIn(
             "pip install --no-deps --force-reinstall -r "
             "$(TRANSFORMERS_OVERRIDE_REQUIREMENTS)",
@@ -142,6 +143,24 @@ class ReleaseContractTest(unittest.TestCase):
             manifest["runtime_override_requirements"],
             "requirements-transformers-gemma4.txt",
         )
+
+    def test_mpo_collator_uses_one_shared_forward_length(self) -> None:
+        batch = MPOPreferenceCollator(pad_token_id=0)(
+            [
+                {
+                    "pair_id": "different-term-token-lengths",
+                    "chosen_input_ids": [2, 3, 4, 5],
+                    "chosen_completion_mask": [0, 1, 1, 1],
+                    "chosen_term_mask": [0, 0, 1, 1],
+                    "rejected_input_ids": [2, 6],
+                    "rejected_completion_mask": [0, 1],
+                    "rejected_term_mask": [0, 1],
+                }
+            ]
+        )
+        self.assertEqual(batch["chosen_input_ids"].shape, batch["rejected_input_ids"].shape)
+        self.assertEqual(batch["rejected_attention_mask"].tolist(), [[True, True, False, False]])
+        self.assertEqual(batch["rejected_term_mask"].tolist(), [[False, True, False, False]])
 
     def test_manifest_pins_the_exact_full_sft_model(self) -> None:
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
