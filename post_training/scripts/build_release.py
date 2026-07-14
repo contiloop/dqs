@@ -20,8 +20,11 @@ import yaml
 
 POST_TRAINING_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = POST_TRAINING_ROOT.parent
-DEPLOYMENT_ASSETS = POST_TRAINING_ROOT / "deployment"
-DEFAULT_OUTPUT = POST_TRAINING_ROOT / "dist" / "dqs_preference_training"
+RESEARCH_ROOT = POST_TRAINING_ROOT / "research"
+PACKAGE_ROOT = POST_TRAINING_ROOT / "dqs_preference_training_hf"
+DEPLOYMENT_ASSETS = PACKAGE_ROOT
+RUNTIME_SOURCE_ROOT = PACKAGE_ROOT / "src"
+DEFAULT_OUTPUT = POST_TRAINING_ROOT / "dist" / "dqs_preference_training_hf"
 RELEASE_MARKER = ".dqs-preference-release"
 
 RUNTIME_SOURCE_FILES = (
@@ -134,8 +137,8 @@ def _validate_hf_args(args: argparse.Namespace) -> None:
 
 def _ensure_inputs(*, data_mode: str) -> None:
     required_paths = [
-        *(POST_TRAINING_ROOT / name for name in RUNTIME_SOURCE_FILES),
-        POST_TRAINING_ROOT / "requirements-gpu.txt",
+        *(RUNTIME_SOURCE_ROOT / name for name in RUNTIME_SOURCE_FILES),
+        PACKAGE_ROOT / "requirements-gpu.txt",
         DEPLOYMENT_ASSETS / "Makefile",
             DEPLOYMENT_ASSETS / "README.md",
             DEPLOYMENT_ASSETS / "scripts" / "download_data.py",
@@ -143,17 +146,17 @@ def _ensure_inputs(*, data_mode: str) -> None:
             DEPLOYMENT_ASSETS / "tests" / "test_download_data.py",
             DEPLOYMENT_ASSETS / "tests" / "test_release_contract.py",
         *(
-            POST_TRAINING_ROOT / "configs" / spec["config_source"]
+            RESEARCH_ROOT / "configs" / spec["config_source"]
             for spec in OBJECTIVES.values()
         ),
         *(
-            POST_TRAINING_ROOT / spec["contract_source"]
+            RESEARCH_ROOT / "contracts" / spec["contract_source"]
             for spec in OBJECTIVES.values()
         ),
     ]
     if data_mode == "local":
         required_paths.extend(
-            POST_TRAINING_ROOT / spec["data_source"]
+            RESEARCH_ROOT / spec["data_source"]
             for spec in OBJECTIVES.values()
         )
     missing = [
@@ -173,7 +176,7 @@ def _release_config(
     hf_repo_id: str | None,
     hf_revision: str | None,
 ) -> dict[str, Any]:
-    source_path = POST_TRAINING_ROOT / "configs" / spec["config_source"]
+    source_path = RESEARCH_ROOT / "configs" / spec["config_source"]
     payload = yaml.safe_load(source_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"config is not a mapping: {source_path}")
@@ -251,9 +254,9 @@ def _write_text_files(staging: Path) -> None:
 
 def _copy_runtime(staging: Path) -> None:
     for filename in RUNTIME_SOURCE_FILES:
-        shutil.copy2(POST_TRAINING_ROOT / filename, staging / "src" / filename)
+        shutil.copy2(RUNTIME_SOURCE_ROOT / filename, staging / "src" / filename)
     shutil.copy2(
-        POST_TRAINING_ROOT / "requirements-gpu.txt",
+        PACKAGE_ROOT / "requirements-gpu.txt",
         staging / "requirements-gpu.txt",
     )
 
@@ -285,7 +288,7 @@ def _copy_objectives(
 ) -> dict[str, dict[str, Any]]:
     objective_manifest: dict[str, dict[str, Any]] = {}
     for objective, spec in OBJECTIVES.items():
-        contract_source = POST_TRAINING_ROOT / spec["contract_source"]
+        contract_source = RESEARCH_ROOT / "contracts" / spec["contract_source"]
         contract_payload = json.loads(contract_source.read_text(encoding="utf-8"))
         source_contract_sha256 = sha256_file(contract_source)
         release_contract_payload = _normalize_contract_paths(contract_payload)
@@ -322,7 +325,7 @@ def _copy_objectives(
         data_relative = f"data/train/{spec['data_release']}"
         data_bundled = data_mode == "local"
         if data_mode == "local":
-            data_source = POST_TRAINING_ROOT / spec["data_source"]
+            data_source = RESEARCH_ROOT / spec["data_source"]
             observed_hash = sha256_file(data_source)
             if observed_hash != expected_hash:
                 raise ValueError(

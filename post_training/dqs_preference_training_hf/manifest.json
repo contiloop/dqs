@@ -1,0 +1,115 @@
+{
+  "bundle_content_sha256": "8607e69e8d46af330e3cf74c9d8dd40b49c7272e7b99424aaab3e2f5d194cda5",
+  "bundle_name": "dqs_preference_training",
+  "data_access": "explicit_download_then_local",
+  "data_mode": "hf",
+  "excluded_scopes": [
+    "raw_golden_pairs",
+    "dataset_synthesis",
+    "source_quality_review",
+    "analysis_reports",
+    "research_caches",
+    "evaluation_runtime"
+  ],
+  "files": {
+    ".dqs-preference-release": "90545a4cfce024520ac9f8350f87a823bb728df7c7601df25612c894423119e9",
+    ".gitignore": "122e62b77036ea7309a3f1395690367f5982aa3150ba7957171ce729127597e3",
+    "Makefile": "484df2b71a79cafc8dbd861cbaf65961c03c1d4131da10b362bc1d8d2ec5f64c",
+    "README.md": "265dea3c6965448d238a45c116b4981e31d822df16094dcbdea3ac809fcccced",
+    "configs/cpo.yaml": "1c92f58382eb1367883c58196803ca8bb7e83736c97effe6171e6028502d3c36",
+    "configs/dpo.yaml": "ea1370e26ac27c26e42d18a5471cd27faddab31d3695fe57547c967b3b8769db",
+    "configs/mpo.yaml": "ee0c6f830fde2e1d097f0556f5e780d43b6899e1a8dc13e32e2d717bb9388125",
+    "data/contracts/cpo.json": "6b8e0f2f029d0096bf5c58ef5ff28a24008cb333f88a0d2490add945483eb01e",
+    "data/contracts/dpo.json": "e3e2e608724a29a64213f951de5ca1d1e5e777f2eb3c66be6605b005420aeb7b",
+    "data/contracts/mpo.json": "184178b8b8f04cb6a580e1899aacc16cf4cc65d5d4c3f9e3c4489d6ea1dc8a46",
+    "requirements-gpu.txt": "72e1c92a4b889b25b319dedd58c474be3d83de66bcb559ad75623a91ebee746b",
+    "scripts/download_data.py": "1b716827b1cb008c739a616040b7f7491d73db83504de6290166eb9d9253eb9f",
+    "scripts/validate_bundle.py": "f64a09463a4f4e62399d2ae097f532a2157bbd265402590de2bdc468d8191ffc",
+    "src/__init__.py": "2d577c75b27ab0f22bfe167688190498052bb1286d32241d08897f32fe68e9cd",
+    "src/cpo_objective.py": "8d9161bcc91c6561b9804bc02c4909eecabfb63caf7d214b0736c5c2991cc0c2",
+    "src/cpo_trainer.py": "cfe6b4d157f9845118fb02549f2d928b88738a48c86b623b761476cde4abeda8",
+    "src/dpo_trainer.py": "3acccd0b746a17a60a4bd2c14d2beae20dcb627305a5fb35a217a78865cb588e",
+    "src/full_preference_data.py": "2fa96334b049a653bd9303be23a5ac7dae4645bc71c331e0c1fb3142d5bb7834",
+    "src/mpo_data.py": "d7101dac83a18f00c7195fbc318f0ec3d50a534e312c4309eeeb8b879c175889",
+    "src/mpo_masking.py": "06ea76e3dc36780e0c1347a0f40bca512d428320f87c74f7ab857d3e8696c0b0",
+    "src/mpo_model.py": "8db79dece6bf97437118bf895716c3676c1d80835aba9223fc16849f7b4718c5",
+    "src/mpo_objective.py": "7f348953e1e1aa5ff7bb1eb8d1371fe081dbe07487bba3cc4000e03319873a20",
+    "src/mpo_trainer.py": "5a46f483117e0fe391b69864f46690fc278fc8abbcdb6d1292f3ba85f7774b87",
+    "src/mpo_wandb.py": "1c95cbaef19f34a692426f62b13b0a5f2dc62995979b1aa40da3c89a57b56a65",
+    "src/preference_runtime.py": "37121ba3fd027f4157fa40c9f481be8f61cb6dbd898fe01e4943ed89a6a089b8",
+    "src/train_cpo.py": "8b2a42ef603958e02ce0bb0b74699856f664f8c9f68544c5aa4bfe4b1b9c8eac",
+    "src/train_dpo.py": "32621a99da7de92c3c21153343d257efe35e8947278e985078e70024e70bc19c",
+    "src/train_mpo.py": "2fbb208036d58400e584549a4fefd33f977ae1f9c28559ae403f9804a620d740",
+    "tests/test_download_data.py": "b61b9df115671e510735beb71487ea4ce3db582b04036a39922152ee63752503",
+    "tests/test_release_contract.py": "1a4d50e012450f92ba97ca760fc6e46418c7de23c330d0be4c7e8ff07c46d428"
+  },
+  "generated_at_utc": "2026-07-14T11:38:26.591310+00:00",
+  "generator": "post_training/scripts/build_release.py",
+  "hf_dataset": {
+    "repo_id": "alwaysgood/dqs-post-training",
+    "revision": "33899900bbb516b5684c09d2e3fa71a192437f35"
+  },
+  "objectives": {
+    "cpo": {
+      "artifact_sha256": "54c96f01ac416c90d24bb2ff757c0e8db5cde7161220a639051c984acda30d2f",
+      "config": "configs/cpo.yaml",
+      "contract": "data/contracts/cpo.json",
+      "data": "data/train/cpo.jsonl",
+      "data_bundled": false,
+      "entrypoint": "src/train_cpo.py",
+      "expected_sft": {
+        "global_step": 184,
+        "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+        "subset_idx": 22
+      },
+      "hf_contract_filename": "cpo/dataset_contract.json",
+      "hf_train_filename": "cpo/train.jsonl",
+      "release_contract_sha256": "6b8e0f2f029d0096bf5c58ef5ff28a24008cb333f88a0d2490add945483eb01e",
+      "row_count": 5200,
+      "run_id": "gemma4_e2b_dqs_cpo_full_response_seed42",
+      "source_contract_sha256": "6b8e0f2f029d0096bf5c58ef5ff28a24008cb333f88a0d2490add945483eb01e"
+    },
+    "dpo": {
+      "artifact_sha256": "4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187",
+      "config": "configs/dpo.yaml",
+      "contract": "data/contracts/dpo.json",
+      "data": "data/train/dpo.jsonl",
+      "data_bundled": false,
+      "entrypoint": "src/train_dpo.py",
+      "expected_sft": {
+        "global_step": 184,
+        "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+        "subset_idx": 22
+      },
+      "hf_contract_filename": "dpo/dataset_contract.json",
+      "hf_train_filename": "dpo/train.jsonl",
+      "release_contract_sha256": "e3e2e608724a29a64213f951de5ca1d1e5e777f2eb3c66be6605b005420aeb7b",
+      "row_count": 5200,
+      "run_id": "gemma4_e2b_dqs_dpo_full_response_seed42",
+      "source_contract_sha256": "e3e2e608724a29a64213f951de5ca1d1e5e777f2eb3c66be6605b005420aeb7b"
+    },
+    "mpo": {
+      "artifact_sha256": "a85d052985e87316b3086acc1903ac0f74958a935094146a59a1e047ef8bb287",
+      "config": "configs/mpo.yaml",
+      "contract": "data/contracts/mpo.json",
+      "data": "data/train/mpo.jsonl",
+      "data_bundled": false,
+      "entrypoint": "src/train_mpo.py",
+      "expected_sft": {
+        "global_step": 184,
+        "run_id": "gemma4_e2b_it_full_iter_lowqe_sf_on_seed42",
+        "subset_idx": 22
+      },
+      "hf_contract_filename": "mpo/dataset_contract.json",
+      "hf_train_filename": "mpo/train.jsonl",
+      "release_contract_sha256": "184178b8b8f04cb6a580e1899aacc16cf4cc65d5d4c3f9e3c4489d6ea1dc8a46",
+      "row_count": 5200,
+      "run_id": "gemma4_e2b_dqs_mpo_setting5_seed42",
+      "source_contract_sha256": "184178b8b8f04cb6a580e1899aacc16cf4cc65d5d4c3f9e3c4489d6ea1dc8a46"
+    }
+  },
+  "runtime_requirements": "requirements-gpu.txt",
+  "schema_version": "dqs_preference_release.v1",
+  "source_git_commit": "1dda9fec6e639b3157ca2bad1ff3d9d894bc19af",
+  "source_post_training_dirty": true
+}

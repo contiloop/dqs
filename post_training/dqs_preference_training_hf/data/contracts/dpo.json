@@ -1,0 +1,86 @@
+{
+  "artifact_path": "source://post_training/prepared/full_response_preference_pairs_final.jsonl",
+  "artifact_schema_version": "dqs.full_response_preference.v1",
+  "artifact_sha256": "4ff1fe26d35518b4c76ddc50f34ce48def8df73b0f9aec3f61ab97aba00e6187",
+  "compatible_objectives": [
+    "DPO",
+    "CPO"
+  ],
+  "cpo_tokenized_artifact_path": "source://post_training/prepared/cpo_tokenized_full_response_pairs_final.jsonl",
+  "cpo_tokenized_artifact_sha256": "54c96f01ac416c90d24bb2ff757c0e8db5cde7161220a639051c984acda30d2f",
+  "cpo_tokenized_contract_path": "source://post_training/dataset_contract_cpo_full_response.json",
+  "cpo_tokenized_contract_sha256": "9cfcf6d6b5ba42c6405acd5180f44c33a0cdc059c55a8480da45d032a93ef381",
+  "excluded_identical_response_rows": 1,
+  "hard_invariants": {
+    "input_order_preserved": true,
+    "only_nfc_identical_teacher_student_rows_are_excluded": true,
+    "pair_ids_are_final_mpo_keep_subset": true,
+    "pair_ids_equal_final_mpo_rows": true,
+    "student_equals_raw_student_translation_byte_for_byte": true,
+    "teacher_and_student_nfc_distinct": true,
+    "teacher_and_student_nonempty": true,
+    "teacher_equals_raw_target_byte_for_byte": true
+  },
+  "negative_policy": "original_full_student_response_no_synthetic_reversion",
+  "ordered_pair_ids_sha256": "a74d42ae9aa5d693ecba2cb94c8da5e21f3563f5e7d0744ababb6bda337a4574",
+  "parent_candidate_sha256": "fc79519ab66801247c2c3336cf818117ff02363baafce15a127a763321c98cd8",
+  "prompt_contract": {
+    "apply_chat_template_again": false,
+    "chosen_and_rejected_are_completion_only": true,
+    "format": "already_serialized_chat_template_ending_at_model_prefix"
+  },
+  "raw_golden_pair_provenance": {
+    "byte_identity_checked_for_every_row": true,
+    "chosen": "target",
+    "rejected": "student_translation"
+  },
+  "rejection_ledger_path": "source://post_training/analysis/full_response_preference_rejections.jsonl",
+  "rejection_ledger_sha256": "ee4785b35132551a679f6fd83c4bed4e1e70360222837307fef416607929f205",
+  "repair_or_fallback": "none",
+  "row_count": 5200,
+  "schema_version": "dqs.full_response_preference_contract.v1",
+  "source_quality_contract_path": "source://post_training/dataset_contract_final_source_filtered.json",
+  "source_quality_contract_sha256": "03037c3ccbe4e5be75176a0f2e609f842377001d2b6a051cd119b2c306059040",
+  "tokenization_contract": {
+    "eos_token_id": 1,
+    "max_observed_sequence_tokens": 2825,
+    "max_seq_length": 2908,
+    "maxima": {
+      "cpo_chosen_sequence_tokens": {
+        "pair_id": "subset_000:row_000000013819",
+        "tokens": 2794
+      },
+      "cpo_rejected_sequence_tokens": {
+        "pair_id": "subset_000:row_000000013819",
+        "tokens": 2825
+      },
+      "dpo_chosen_completion_tokens": {
+        "pair_id": "subset_012:row_000000123291",
+        "tokens": 1501
+      },
+      "dpo_chosen_sequence_tokens": {
+        "pair_id": "subset_000:row_000000013819",
+        "tokens": 2794
+      },
+      "dpo_rejected_completion_tokens": {
+        "pair_id": "subset_020:row_000000111373",
+        "tokens": 1499
+      },
+      "dpo_rejected_sequence_tokens": {
+        "pair_id": "subset_000:row_000000013819",
+        "tokens": 2825
+      },
+      "prompt_tokens": {
+        "pair_id": "subset_000:row_000000013819",
+        "tokens": 1398
+      }
+    },
+    "pad_token_id": 0,
+    "tokenizer_backend_core_sha256": "1e31c483598073ccd8ff2bc1beaf77cb83fb923968487f05a1877a9f6441c627",
+    "tokenizer_name": "google/gemma-4-E2B-it",
+    "tokenizer_resolved_revision": "9dbdf8a839e4e9e0eb56ed80cc8886661d3817cf",
+    "tokenizer_vocab_sha256": "d78b3ddf966363e3cd1f7242f4ac5590a3f1bac57c7be03b199dbccc85426e42",
+    "trl_version": "0.24.0",
+    "truncation_allowed": false
+  }
+}

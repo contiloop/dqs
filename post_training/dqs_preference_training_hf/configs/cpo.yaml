@@ -1,0 +1,97 @@
+run:
+  id: gemma4_e2b_dqs_cpo_full_response_seed42
+  seed: 42
+  output_dir: outputs/gemma4_e2b_dqs_cpo_full_response_seed42
+  require_smoke_step_receipt: true
+logging:
+  wandb:
+    enabled: true
+    strict: true
+    mode: online
+    project: dqs
+    entity: null
+    run_name: gemma4_e2b_dqs_cpo_full_response_seed42
+    run_id: gemma4_e2b_dqs_cpo_full_response_seed42
+    group: gemma4_e2b_dqs_cpo_full_response
+    job_type: cpo-post-training
+    resume: allow
+    local_subdir: wandb
+    log_smoke: false
+    log_model: false
+    watch: false
+    tags:
+    - dqs
+    - gemma4
+    - e2b
+    - cpo
+    - full-response
+    - teacher-vs-student
+    - full
+    - en-ko
+    - lr5e-6
+    - cosine
+    - final-source-filtered
+    - seed42
+model:
+  name_or_path: models/sft_final
+  revision: null
+  subfolder: null
+  trust_remote_code: false
+  require_final_stage_model: true
+  unsloth_model_api: fast_model
+  expected_sft_run_id: gemma4_e2b_it_full_iter_lowqe_sf_on_seed42
+  expected_sft_subset_idx: 22
+  expected_sft_global_step: 184
+data:
+  source: local
+  path: data/train/cpo.jsonl
+  eval_path: null
+  contract_path: data/contracts/cpo.json
+  cache_dir: .cache/datasets/cpo
+  hf_repo_id: null
+  hf_revision: null
+  hf_train_filename: null
+  hf_eval_filename: null
+  hf_train_split: null
+  hf_eval_split: null
+  hf_contract_filename: null
+loss:
+  objective: cpo_full_response
+  beta: 0.1
+  cpo_alpha: 1.0
+  loss_type: sigmoid
+  label_smoothing: 0.0
+training:
+  backend: unsloth
+  dtype: bfloat16
+  load_in_4bit: false
+  load_in_8bit: false
+  freeze_embeddings: false
+  gradient_checkpointing: unsloth
+  unsloth_fullgraph: false
+  max_seq_length: 2908
+  logits_projection: selected
+  token_logp_backend: unsloth_fused
+  learning_rate: 5.0e-06
+  warmup_ratio: 0.1
+  scheduler: cosine
+  optimizer: adamw_torch
+  max_grad_norm: 5.0
+  weight_decay: 0.0
+  num_train_epochs: 1
+  max_steps: -1
+  effective_batch_size: 128
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: auto
+  save_strategy: steps
+  save_steps: 10
+  save_total_limit: 2
+  logging_steps: 1
+  eval_strategy: 'no'
+  eval_steps: 250
+  dataloader_num_workers: 4
+  dataloader_pin_memory: true
+  ddp_find_unused_parameters: false
+  report_to: []
+  resume_from_checkpoint: null

@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+.cache/
+data/train/*.jsonl
+models/
+outputs/
+wandb/
