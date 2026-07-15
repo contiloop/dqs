@@ -20,7 +20,7 @@ from train_mpo import _output_dir
 
 
 POST_TRAINING_ROOT = Path(__file__).resolve().parents[2]
-PACKAGE_ROOT = POST_TRAINING_ROOT / "dqs_preference_training_hf"
+PACKAGE_ROOT = POST_TRAINING_ROOT
 CONFIG_ROOT = PACKAGE_ROOT / "configs"
 CONTRACT_ROOT = PACKAGE_ROOT / "data" / "contracts"
 

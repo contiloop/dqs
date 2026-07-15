@@ -1,7 +1,7 @@
 run:
   id: gemma4_e2b_dqs_dpo_full_response_seed42
   seed: 42
-  output_dir: post_training/dqs_preference_training_hf/outputs/gemma4_e2b_dqs_dpo_full_response_seed42
+  output_dir: post_training/outputs/dpo
   require_smoke_step_receipt: true
 
 logging:

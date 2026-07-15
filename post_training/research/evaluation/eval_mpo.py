@@ -17,7 +17,7 @@ import yaml
 
 POST_TRAINING_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = POST_TRAINING_ROOT.parent
-PACKAGE_ROOT = POST_TRAINING_ROOT / "dqs_preference_training_hf"
+PACKAGE_ROOT = POST_TRAINING_ROOT
 RUNTIME_SRC = PACKAGE_ROOT / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))

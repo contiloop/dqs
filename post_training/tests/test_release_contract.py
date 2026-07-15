@@ -141,13 +141,28 @@ class ReleaseContractTest(unittest.TestCase):
             self.assertNotIn("warmup_ratio", training)
 
     def test_outputs_are_isolated_and_distinct(self) -> None:
+        expected = {
+            "mpo.yaml": ROOT / "outputs" / "mpo",
+            "cpo.yaml": ROOT / "outputs" / "cpo",
+            "dpo.yaml": ROOT / "outputs" / "dpo",
+        }
         outputs = []
         for name in ("mpo.yaml", "cpo.yaml", "dpo.yaml"):
             config = self.load(name)
             output = _output_dir(config["run"], smoke_step=False)
             self.assertIn(ROOT.resolve(), output.resolve().parents)
+            self.assertEqual(output, expected[name].resolve())
             outputs.append(output)
         self.assertEqual(len(set(outputs)), 3)
+
+    def test_mpo_ablation_outputs_are_short_and_non_overlapping(self) -> None:
+        expected = {
+            "mpo_constant.yaml": "outputs/mpo_constant",
+            "mpo_constant_lambda5.yaml": "outputs/mpo_lambda5",
+        }
+        for name, output_dir in expected.items():
+            with self.subTest(config=name):
+                self.assertEqual(self.load(name)["run"]["output_dir"], output_dir)
 
     def test_manifest_declares_exact_objectives(self) -> None:
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))

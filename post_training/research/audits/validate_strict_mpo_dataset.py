@@ -13,9 +13,7 @@ from typing import Any, Mapping
 
 RESEARCH_ROOT = Path(__file__).resolve().parents[1]
 DATA_PREP_DIR = RESEARCH_ROOT / "data_prep"
-RUNTIME_SRC = (
-    RESEARCH_ROOT.parent / "dqs_preference_training_hf" / "src"
-)
+RUNTIME_SRC = RESEARCH_ROOT.parent / "src"
 for import_path in (DATA_PREP_DIR, RUNTIME_SRC):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))

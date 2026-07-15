@@ -1,7 +1,7 @@
 run:
-  id: gemma4_e2b_dqs_mpo_s5_const_noclip_lsft5_lr5e-6_s42
+  id: gemma4_e2b_dqs_mpo_setting5_constant_noclip_lr5e-6_seed42
   seed: 42
-  output_dir: outputs/gemma4_e2b_dqs_mpo_setting5_constant_noclip_lambdasft5_lr5e-6_seed42
+  output_dir: outputs/mpo_constant
   require_smoke_step_receipt: false
 logging:
   wandb:
@@ -10,8 +10,8 @@ logging:
     mode: online
     project: dqs
     entity: null
-    run_name: gemma4_e2b_dqs_mpo_setting5_constant_noclip_lambdasft5_lr5e-6_seed42
-    run_id: gemma4_e2b_dqs_mpo_s5_const_noclip_lsft5_lr5e-6_s42
+    run_name: gemma4_e2b_dqs_mpo_setting5_constant_noclip_lr5e-6_seed42
+    run_id: gemma4_e2b_dqs_mpo_setting5_constant_noclip_lr5e-6_seed42
     group: gemma4_e2b_dqs_mpo_setting5
     job_type: mpo-post-training
     resume: allow
@@ -31,7 +31,6 @@ logging:
     - constant
     - no-warmup
     - no-grad-clip
-    - lambda-sft5
     - final-source-filtered
     - seed42
 model:
@@ -60,7 +59,7 @@ data:
   hf_contract_filename: null
 loss:
   paper_setting: 5
-  lambda_sft: 5.0
+  lambda_sft: 10.0
   lambda_mpo: 1.0
   preference_beta: 0.25
   smooth_l1_delta: 1.0

@@ -1,9 +1,0 @@
-__pycache__/
-*.py[cod]
-.venv/
-.cache/
-data/train/*.jsonl
-models/
-outputs/
-wandb/
-unsloth_compiled_cache/

@@ -208,8 +208,8 @@ CPO semantic:        19fc8ba480a2321db1ba2542a0525be1dfca62a7ddf0832e432d69794e6
 - full-response DPO/CPO pairs: `post_training/research/prepared/full_response_preference_pairs_final.jsonl`
 - full-response DPO/CPO contract: `post_training/research/contracts/dataset_contract_full_response_preference.json`
 - DPO config source: `post_training/research/configs/dpo_full_response.yaml`
-- DPO entry point: `post_training/dqs_preference_training_hf/src/train_dpo.py`
-- DPO runtime guards: `post_training/dqs_preference_training_hf/src/dpo_trainer.py`
+- DPO entry point: `post_training/src/train_dpo.py`
+- DPO runtime guards: `post_training/src/dpo_trainer.py`
 - CPO tokenized train file: `post_training/research/prepared/cpo_tokenized_full_response_pairs_final.jsonl`
 - CPO tokenized contract: `post_training/research/contracts/dataset_contract_cpo_full_response.json`
 - review samples: `post_training/research/analysis/STRICT_V2_SAMPLE_10.md`,
@@ -246,7 +246,7 @@ python3 post_training/research/audits/validate_mpo_token_masks.py \
 python3 post_training/research/data_prep/build_mpo_dataset_contract.py
 python3 post_training/research/audits/audit_strict_v2_dataset.py
 python3 post_training/research/data_prep/finalize_preference_datasets.py
-make -C post_training/dqs_preference_training_hf dry-run
+make -C post_training dry-run
 make -C post_training test
 ```
 

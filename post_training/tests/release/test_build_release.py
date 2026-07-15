@@ -49,6 +49,7 @@ class BuildReleaseTest(unittest.TestCase):
                 self.assertEqual(
                     config["data"]["cache_dir"], f".cache/datasets/{objective}"
                 )
+                self.assertEqual(config["run"]["output_dir"], f"outputs/{objective}")
                 self.assertIsNone(config["data"]["hf_repo_id"])
                 self.assertIsNone(config["data"]["hf_revision"])
                 self.assertFalse(manifest["objectives"][objective]["data_bundled"])
@@ -58,6 +59,10 @@ class BuildReleaseTest(unittest.TestCase):
                 )
             self.assertTrue((output / "scripts" / "download_data.py").is_file())
             self.assertTrue((output / "scripts" / "download_model.py").is_file())
+            self.assertTrue((output / "configs" / "mpo_constant.yaml").is_file())
+            self.assertTrue(
+                (output / "configs" / "mpo_constant_lambda5.yaml").is_file()
+            )
             self.assertEqual(manifest["sft_model"]["repo_id"], "alwaysgood/dqs-runs")
             self.assertEqual(
                 manifest["sft_model"]["revision"],

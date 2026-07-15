@@ -2,7 +2,7 @@ run:
   id: gemma4_e2b_dqs_mpo_setting5_seed42
   seed: 42
   # Kept separate from the iterative SFT run on purpose.
-  output_dir: post_training/dqs_preference_training_hf/outputs/gemma4_e2b_dqs_mpo_setting5_seed42
+  output_dir: post_training/outputs/mpo
   # A one-step run in this exact environment/model/data contract must succeed
   # before the full run is allowed to start.
   require_smoke_step_receipt: true

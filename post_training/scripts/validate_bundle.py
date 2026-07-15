@@ -18,6 +18,11 @@ from download_model import load_model_spec, validate_model_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_OBJECTIVES = {"mpo", "cpo", "dpo"}
+EXPECTED_OUTPUT_DIRS = {
+    "mpo": "outputs/mpo",
+    "cpo": "outputs/cpo",
+    "dpo": "outputs/dpo",
+}
 EXPECTED_RUNTIME = {
     "accelerate": "1.14.0",
     "datasets": "4.3.0",
@@ -151,8 +156,11 @@ def validate_objective(
     model = config.get("model")
     if not all(isinstance(value, dict) for value in (data, run, model)):
         raise ValueError(f"{name} config is missing run/model/data mappings")
-    if str(run.get("output_dir", "")).startswith("outputs/") is False:
-        raise ValueError(f"{name} output must be isolated under outputs/")
+    if run.get("output_dir") != EXPECTED_OUTPUT_DIRS[name]:
+        raise ValueError(
+            f"{name} output must be {EXPECTED_OUTPUT_DIRS[name]!r}, "
+            f"got {run.get('output_dir')!r}"
+        )
     if model.get("name_or_path") != "models/sft_final":
         raise ValueError(f"{name} default model path must be models/sft_final")
     if data.get("cache_dir") != f".cache/datasets/{name}":

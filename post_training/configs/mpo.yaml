@@ -1,7 +1,7 @@
 run:
-  id: gemma4_e2b_dqs_dpo_full_response_seed42
+  id: gemma4_e2b_dqs_mpo_setting5_seed42
   seed: 42
-  output_dir: outputs/gemma4_e2b_dqs_dpo_full_response_seed42
+  output_dir: outputs/mpo
   require_smoke_step_receipt: true
 logging:
   wandb:
@@ -10,10 +10,10 @@ logging:
     mode: online
     project: dqs
     entity: null
-    run_name: gemma4_e2b_dqs_dpo_full_response_seed42
-    run_id: gemma4_e2b_dqs_dpo_full_response_seed42
-    group: gemma4_e2b_dqs_dpo_full_response
-    job_type: dpo-post-training
+    run_name: gemma4_e2b_dqs_mpo_setting5_seed42
+    run_id: gemma4_e2b_dqs_mpo_setting5_seed42
+    group: gemma4_e2b_dqs_mpo_setting5
+    job_type: mpo-post-training
     resume: allow
     local_subdir: wandb
     log_smoke: false
@@ -23,10 +23,8 @@ logging:
     - dqs
     - gemma4
     - e2b
-    - dpo
-    - full-response
-    - teacher-vs-student
-    - reference-precomputed
+    - mpo
+    - setting5
     - full
     - en-ko
     - lr5e-6
@@ -45,34 +43,24 @@ model:
   expected_sft_global_step: 184
 data:
   source: local
-  path: data/train/dpo.jsonl
-  contract_path: data/contracts/dpo.json
-  cache_dir: .cache/datasets/dpo
+  path: data/train/mpo.jsonl
+  eval_path: null
+  contract_path: data/contracts/mpo.json
+  cache_dir: .cache/datasets/mpo
   hf_repo_id: null
   hf_revision: null
+  hf_config_name: null
   hf_train_filename: null
+  hf_eval_filename: null
   hf_train_split: null
+  hf_eval_split: null
   hf_contract_filename: null
 loss:
-  objective: dpo_full_response
-  trainer: UnslothDPOTrainer
-  beta: 0.1
-  loss_type: sigmoid
-  label_smoothing: 0.0
-  f_divergence_type: reverse_kl
-  reference_free: false
-  rpo_alpha: null
-  ld_alpha: null
-  loss_weights: null
-  use_weighting: false
-  use_liger_loss: false
-  sync_ref_model: false
-reference:
-  mode: initial_sft_policy_precomputed
-  precompute_ref_log_probs: true
-  precompute_ref_batch_size: 1
-  require_ref_model_none: true
-  precompute_before_resume_restore: true
+  paper_setting: 5
+  lambda_sft: 10.0
+  lambda_mpo: 1.0
+  preference_beta: 0.25
+  smooth_l1_delta: 1.0
 training:
   backend: unsloth
   dtype: bfloat16
@@ -83,14 +71,8 @@ training:
   unsloth_compile: disabled
   unsloth_fullgraph: false
   max_seq_length: 2908
-  max_length: 2908
-  max_prompt_length: 1398
-  max_completion_length: 1501
-  truncation_mode: keep_end
-  padding_free: false
-  use_logits_to_keep: true
-  dataset_num_proc: 4
-  disable_dropout: true
+  logits_projection: selected
+  token_logp_backend: unsloth_fused
   learning_rate: 5.0e-06
   warmup_steps: 0.1
   scheduler: cosine
@@ -112,6 +94,5 @@ training:
   dataloader_num_workers: 4
   dataloader_pin_memory: true
   ddp_find_unused_parameters: false
-  smoke_sample_rows: 128
   report_to: []
   resume_from_checkpoint: null

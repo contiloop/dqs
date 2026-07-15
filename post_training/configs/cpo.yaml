@@ -1,7 +1,7 @@
 run:
-  id: gemma4_e2b_dqs_mpo_setting5_seed42
+  id: gemma4_e2b_dqs_cpo_full_response_seed42
   seed: 42
-  output_dir: outputs/gemma4_e2b_dqs_mpo_setting5_seed42
+  output_dir: outputs/cpo
   require_smoke_step_receipt: true
 logging:
   wandb:
@@ -10,10 +10,10 @@ logging:
     mode: online
     project: dqs
     entity: null
-    run_name: gemma4_e2b_dqs_mpo_setting5_seed42
-    run_id: gemma4_e2b_dqs_mpo_setting5_seed42
-    group: gemma4_e2b_dqs_mpo_setting5
-    job_type: mpo-post-training
+    run_name: gemma4_e2b_dqs_cpo_full_response_seed42
+    run_id: gemma4_e2b_dqs_cpo_full_response_seed42
+    group: gemma4_e2b_dqs_cpo_full_response
+    job_type: cpo-post-training
     resume: allow
     local_subdir: wandb
     log_smoke: false
@@ -23,8 +23,9 @@ logging:
     - dqs
     - gemma4
     - e2b
-    - mpo
-    - setting5
+    - cpo
+    - full-response
+    - teacher-vs-student
     - full
     - en-ko
     - lr5e-6
@@ -43,24 +44,23 @@ model:
   expected_sft_global_step: 184
 data:
   source: local
-  path: data/train/mpo.jsonl
+  path: data/train/cpo.jsonl
   eval_path: null
-  contract_path: data/contracts/mpo.json
-  cache_dir: .cache/datasets/mpo
+  contract_path: data/contracts/cpo.json
+  cache_dir: .cache/datasets/cpo
   hf_repo_id: null
   hf_revision: null
-  hf_config_name: null
   hf_train_filename: null
   hf_eval_filename: null
   hf_train_split: null
   hf_eval_split: null
   hf_contract_filename: null
 loss:
-  paper_setting: 5
-  lambda_sft: 10.0
-  lambda_mpo: 1.0
-  preference_beta: 0.25
-  smooth_l1_delta: 1.0
+  objective: cpo_full_response
+  beta: 0.1
+  cpo_alpha: 1.0
+  loss_type: sigmoid
+  label_smoothing: 0.0
 training:
   backend: unsloth
   dtype: bfloat16

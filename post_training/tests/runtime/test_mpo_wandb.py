@@ -48,7 +48,7 @@ class FakeWandb:
 class MPOWandbTest(unittest.TestCase):
     def setUp(self) -> None:
         post_training_root = Path(__file__).resolve().parents[2]
-        config_path = post_training_root / "dqs_preference_training_hf" / "configs" / "mpo.yaml"
+        config_path = post_training_root / "configs" / "mpo.yaml"
         payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         self.spec = MPOWandbConfig.from_logging_config(
             payload["logging"],

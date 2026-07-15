@@ -10,9 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-RUNTIME_SRC = (
-    Path(__file__).resolve().parents[2] / "dqs_preference_training_hf" / "src"
-)
+RUNTIME_SRC = Path(__file__).resolve().parents[2] / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 

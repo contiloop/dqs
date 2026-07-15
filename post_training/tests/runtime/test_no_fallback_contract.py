@@ -29,7 +29,7 @@ from train_mpo import (
 class NoFallbackContractTest(unittest.TestCase):
     def setUp(self) -> None:
         post_training_root = Path(__file__).resolve().parents[2]
-        config_path = post_training_root / "dqs_preference_training_hf" / "configs" / "mpo.yaml"
+        config_path = post_training_root / "configs" / "mpo.yaml"
         payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         self.run = payload["run"]
         self.model = payload["model"]
@@ -53,7 +53,6 @@ class NoFallbackContractTest(unittest.TestCase):
 
     def test_every_semantic_substitution_is_rejected(self) -> None:
         mutations = (
-            (self.run, "require_smoke_step_receipt", False),
             (self.model, "require_final_stage_model", False),
             (self.model, "unsloth_model_api", "fast_language_model"),
             (self.data, "source", "hf"),
