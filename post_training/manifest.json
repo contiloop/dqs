@@ -1,5 +1,5 @@
 {
-  "bundle_content_sha256": "55c341a902ae32f4a3426d3bb7b4206bee16b1aaefe4f0738f7ae762be28b441",
+  "bundle_content_sha256": "4a835b4f6f2f4aa6ddc7067ae26cc6d77df9ffa4484f26d48ec74b11d0397090",
   "bundle_name": "dqs_preference_training",
   "data_access": "explicit_download_then_local",
   "data_mode": "hf",
@@ -13,14 +13,14 @@
   ],
   "files": {
     ".dqs-preference-release": "90545a4cfce024520ac9f8350f87a823bb728df7c7601df25612c894423119e9",
-    ".gitignore": "ae76f6e22da63349dbfe455b05327a588a24f4ba84e78dff5095ff9decf078cc",
-    "Makefile": "af849a250604c1fa562b8d001910e2fd92ac4905a2ea158290155e62376f6024",
-    "README.md": "dc57872a9802782fb7e097b1de8ee71d0cefe28da8e185646663a8cd772c0951",
-    "configs/cpo.yaml": "754228bdfc0b864362723dc3781f923b0884f69e41c6d46cb8bddece0df2f937",
-    "configs/dpo.yaml": "5825b1ea640c833b71340f1142c555f1bec2590aae0d2f4cbd62b915fe557932",
-    "configs/mpo.yaml": "8a2c8c27c2f53694d42959e2d49a95f4241c9b1a0f8461c327713569d7c9caf5",
-    "configs/mpo_constant.yaml": "494e89a39022bdf8c65cd0aaf77919a7586578dbfd5eed046b57eb9db3d643ae",
-    "configs/mpo_constant_lambda5.yaml": "b6c611201ee6eb33bdf0a0f8629748686724c3df1c528470ab9f57fca420091e",
+    ".gitignore": "81eed3007fa4e12851aa957ddbe373efa57cee8c149343d601f261e2f577c8b9",
+    "Makefile": "adaeaabb27f81ca7f575b178b22f4193fc881c5d9507af36b9816ada306135a0",
+    "README.md": "25b3953e5bafcfd7032ea9bd260dac54f321a2720fd5dec62863db4d0e876108",
+    "configs/cpo.yaml": "12077433a122a5540903bef093aaa40f27aa40488f5d6200fb8577c14935bce5",
+    "configs/dpo.yaml": "23be4623baaa122efe0ef86f10f4ad1adc403424e56dbbf5ce74acfea094aee8",
+    "configs/mpo.yaml": "fe2a2dd0a88f1ece9b907aad399097fdfc88832aee453f706073705c74731e3d",
+    "configs/mpo_constant.yaml": "664e45245c80c6ecb32626c8484b28d216d854525441f0f3c1d6d71bc78cbc44",
+    "configs/mpo_constant_lambda5.yaml": "b32e7d8a84cb32ace78a41d8459d3c3f2ef1e770350fb1548d770dc1cb502d2c",
     "data/contracts/cpo.json": "39bd94cf7a5b484a5d66848f63caa24c68f77e08994b45def981c73491637084",
     "data/contracts/dpo.json": "5a2d382745fecebe9397fd499c7d073c7f22f5991f8a9ea7fcec8d1b46231f25",
     "data/contracts/mpo.json": "a2e775e86631e1608f4efdacc1e1e84e4302cbdcebd379c804fca79da9f995be",
@@ -28,7 +28,7 @@
     "requirements-transformers-gemma4.txt": "a90fc05e66c332e9462cb4002a0c1f5e98d98e52dd1c0dcbc277088d1b6f887b",
     "scripts/download_data.py": "1b716827b1cb008c739a616040b7f7491d73db83504de6290166eb9d9253eb9f",
     "scripts/download_model.py": "31c55a5dfb825130ff2b8431f6dc27c2ce51526c1eec7c6285445c9e3db8ceb4",
-    "scripts/validate_bundle.py": "399b2e9692ec5bbb0de1978c4677360a131c8a82e2ec27219436124ff8397d9c",
+    "scripts/validate_bundle.py": "e55bf76ff9fe8a0df185a1e3a7ce4e045af1e6362e77652b43b6ab26dbc53d7a",
     "src/__init__.py": "2d577c75b27ab0f22bfe167688190498052bb1286d32241d08897f32fe68e9cd",
     "src/cpo_objective.py": "8d9161bcc91c6561b9804bc02c4909eecabfb63caf7d214b0736c5c2991cc0c2",
     "src/cpo_trainer.py": "744a840bb111b1bbdeb29a309397c78f7163346484c17fcf480b9deb8c3b1d52",
@@ -46,9 +46,9 @@
     "src/train_mpo.py": "1b2056242ec41c29df1b43a4a636bc789bb2592ff85fad3d5f91c31f79ed2547",
     "tests/test_download_data.py": "b61b9df115671e510735beb71487ea4ce3db582b04036a39922152ee63752503",
     "tests/test_download_model.py": "ab3a9fc779d6c73af864d5ac44e35576f53d359721804be5afcde216340c66e7",
-    "tests/test_release_contract.py": "845dee57f40f9da3ac0caee08a9424815a9f433d4b0e901804bc2591757b37b1"
+    "tests/test_release_contract.py": "6b985356f36a9d550f6942f54048745710b9f7e13f0c48aaece322c5d1b03cc4"
   },
-  "generated_at_utc": "2026-07-14T16:21:04+00:00",
+  "generated_at_utc": "2026-07-15T04:43:25.902578+00:00",
   "generator": "post_training/scripts/build_release.py",
   "hf_dataset": {
     "repo_id": "alwaysgood/dqs-post-training",
@@ -165,6 +165,6 @@
     "revision": "a58b1878988efcecc9a2644f8324bd00131864b5",
     "total_size_bytes": 10279726920
   },
-  "source_git_commit": "a4569f70c2b46e48cc345318d5f9c823591b8b92",
+  "source_git_commit": "0b6be87326eb2de052cd432c8c52d1882e2c85e4",
   "source_post_training_dirty": false
 }
