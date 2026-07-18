@@ -11,3 +11,7 @@ model:
   enable_thinking: false
   require_thinking_control: true
   tokenizer_revision: main
+  # Text-only SFT freezes non-text parameters, so every remaining trainable
+  # parameter participates in the loss graph. Unsloth's reentrant activation
+  # checkpointing requires DDP unused-parameter traversal to stay disabled.
+  ddp_find_unused_parameters: false

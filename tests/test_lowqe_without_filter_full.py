@@ -39,6 +39,7 @@ class LowQeWithoutFilterFullTest(TestCase):
         cfg = compose_config(REPO_ROOT / "configs/lowqe_without_filter_full.yaml")
 
         self.assertEqual(cfg["training"]["tuning_mode"], "full")
+        self.assertFalse(cfg["model"]["ddp_find_unused_parameters"])
         self.assertEqual(cfg["data"]["qe_selection_order"], "low")
         self.assertFalse(cfg["data"]["degeneration_filter"]["student_enabled"])
         self.assertTrue(cfg["data"]["degeneration_filter"]["student_require_valid_output"])
