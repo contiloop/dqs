@@ -13,7 +13,7 @@ from typing import Any, Literal, Mapping
 from pydantic import BaseModel, Field, ValidationError
 
 from degeneration_filter import classify_student_output
-from io_utils import write_jsonl
+from io_utils import read_jsonl, write_jsonl
 from progress import progress, progress_context
 from text_tokenization import text_token_ids
 
@@ -860,6 +860,130 @@ def _write_teacher_artifacts(
     write_jsonl(subset_dir / "teacher_artifacts.jsonl", records)
 
 
+def _load_partial_teacher_outputs(
+    *,
+    subset_dir: Path,
+    candidates: list[dict[str, Any]],
+    enabled: bool,
+) -> dict[str, Any]:
+    artifact_path = subset_dir / "teacher_artifacts.jsonl"
+    golden_path = subset_dir / "golden_pairs.jsonl"
+    empty = {
+        "resumed": False,
+        "request_rows": [],
+        "raw_rows": [],
+        "parsed_rows": [],
+        "accepted_rows": [],
+        "rejected_rows": [],
+        "processed_ids": set(),
+        "retry_ids": set(),
+        "next_batch_idx": 0,
+    }
+    if not enabled or (not artifact_path.exists() and not golden_path.exists()):
+        return empty
+    if not artifact_path.exists() or not golden_path.exists():
+        missing = artifact_path if not artifact_path.exists() else golden_path
+        raise RuntimeError(
+            "partial teacher resume requires both teacher_artifacts.jsonl and "
+            f"golden_pairs.jsonl; missing={missing}"
+        )
+
+    candidate_ids = [str(row.get("id", "")) for row in candidates]
+    if len(candidate_ids) != len(set(candidate_ids)):
+        raise RuntimeError("partial teacher resume requires unique candidate ids")
+    candidate_id_set = set(candidate_ids)
+
+    rows_by_type: dict[str, list[dict[str, Any]]] = {
+        "teacher_request": [],
+        "teacher_raw_response": [],
+        "teacher_parsed_item": [],
+        "teacher_rejected_row": [],
+    }
+    for record in read_jsonl(artifact_path):
+        record_type = str(record.get("record_type", ""))
+        if record_type not in rows_by_type:
+            raise RuntimeError(
+                f"unsupported record_type in partial teacher artifact: {record_type or '<missing>'}"
+            )
+        row = dict(record)
+        row.pop("record_type", None)
+        rows_by_type[record_type].append(row)
+
+    accepted = read_jsonl(golden_path)
+    accepted_ids = [str(row.get("id", "")) for row in accepted]
+    if len(accepted_ids) != len(set(accepted_ids)):
+        raise RuntimeError("partial teacher golden_pairs.jsonl contains duplicate ids")
+    unknown_accepted = sorted(set(accepted_ids) - candidate_id_set)
+    if unknown_accepted:
+        raise RuntimeError(
+            "partial teacher golden pairs are not present in current candidates; "
+            f"first_unknown_ids={unknown_accepted[:5]} count={len(unknown_accepted)}"
+        )
+
+    latest_status_by_id: dict[str, str] = {}
+    for raw_row in rows_by_type["teacher_raw_response"]:
+        status = str(raw_row.get("status", ""))
+        item_ids = raw_row.get("item_ids", [])
+        if not isinstance(item_ids, list):
+            raise RuntimeError("partial teacher raw response item_ids must be a list")
+        for item_id in item_ids:
+            latest_status_by_id[str(item_id)] = status
+
+    accepted_id_set = set(accepted_ids)
+    retry_ids = {
+        item_id
+        for item_id, status in latest_status_by_id.items()
+        if status == "failed" and item_id not in accepted_id_set
+    }
+    unknown_retry = sorted(retry_ids - candidate_id_set)
+    if unknown_retry:
+        raise RuntimeError(
+            "partial teacher failed responses reference ids not present in current candidates; "
+            f"first_unknown_ids={unknown_retry[:5]} count={len(unknown_retry)}"
+        )
+
+    rejected = [
+        row
+        for row in rows_by_type["teacher_rejected_row"]
+        if str(row.get("id", "")) not in retry_ids
+    ]
+    rejected_ids = [str(row.get("id", "")) for row in rejected]
+    if len(rejected_ids) != len(set(rejected_ids)):
+        raise RuntimeError("partial teacher artifact contains duplicate terminal rejected ids")
+    unknown_rejected = sorted(set(rejected_ids) - candidate_id_set)
+    if unknown_rejected:
+        raise RuntimeError(
+            "partial teacher rejected rows are not present in current candidates; "
+            f"first_unknown_ids={unknown_rejected[:5]} count={len(unknown_rejected)}"
+        )
+    overlap = sorted(accepted_id_set & set(rejected_ids))
+    if overlap:
+        raise RuntimeError(
+            "partial teacher artifact marks ids as both accepted and rejected; "
+            f"first_overlap_ids={overlap[:5]} count={len(overlap)}"
+        )
+
+    request_rows = rows_by_type["teacher_request"]
+    raw_rows = rows_by_type["teacher_raw_response"]
+    parsed_rows = rows_by_type["teacher_parsed_item"]
+    batch_indexes = [
+        int(row["batch_idx"])
+        for row in [*request_rows, *raw_rows]
+        if row.get("batch_idx") is not None
+    ]
+    return {
+        "resumed": True,
+        "request_rows": request_rows,
+        "raw_rows": raw_rows,
+        "parsed_rows": parsed_rows,
+        "accepted_rows": accepted,
+        "rejected_rows": rejected,
+        "processed_ids": accepted_id_set | set(rejected_ids),
+        "retry_ids": retry_ids,
+        "next_batch_idx": max(batch_indexes, default=-1) + 1,
+    }
+
+
 def _flush_teacher_outputs(
     *,
     cfg: Mapping[str, Any],
@@ -907,29 +1031,58 @@ def run_teacher_generation(
     temperature = float(teacher_cfg.get("temperature", 0.0) or 0.0)
     refill_until_target = bool(teacher_cfg.get("refill_until_target", True))
     abort_on_all_failed_window = bool(teacher_cfg.get("abort_on_all_failed_window", True))
+    resume_partial = bool(teacher_cfg.get("resume_partial", True))
 
     system_prompt = _teacher_system_prompt(teacher_cfg)
     user_template = _read_text(str(teacher_cfg.get("user_prompt_path", "prompts/teacher_user_batch.txt")))
     providers = _enabled_providers(cfg)
     seed = int(_get(cfg, "run.seed", 42) or 42)
 
-    request_rows: list[dict[str, Any]] = []
-    raw_rows: list[dict[str, Any]] = []
-    parsed_rows: list[dict[str, Any]] = []
+    resume_state = _load_partial_teacher_outputs(
+        subset_dir=subset_dir,
+        candidates=candidates,
+        enabled=resume_partial,
+    )
+    request_rows = list(resume_state["request_rows"])
+    raw_rows = list(resume_state["raw_rows"])
+    parsed_rows = list(resume_state["parsed_rows"])
     filter_cfg = _get(cfg, "data.degeneration_filter", {})
     if not isinstance(filter_cfg, Mapping):
         filter_cfg = {}
     teacher_filter_enabled = bool(filter_cfg.get("enabled", True)) and bool(filter_cfg.get("teacher_enabled", True))
     translation_tokenizer = _load_translation_tokenizer(cfg) if reject_over_max_output_tokens else None
-    accepted: list[dict[str, Any]] = []
-    rejected: list[dict[str, Any]] = []
+    accepted = list(resume_state["accepted_rows"])
+    rejected = list(resume_state["rejected_rows"])
     _validate_teacher_candidate_drafts(candidates)
     bucket_plan = _teacher_bucket_plan(cfg=cfg, candidates=candidates, target=target)
     buckets = bucket_plan["buckets"]
     quotas = list(bucket_plan["quotas"])
     accepted_bucket_counts = [0 for _ in buckets]
     requested_bucket_counts = [0 for _ in buckets]
-    bucket_queues = _teacher_bucket_queues(candidates=candidates, buckets=buckets)
+    candidates_by_id = {str(row["id"]): row for row in candidates}
+    for row in accepted:
+        bucket_idx = _bucket_index_for_candidate(candidates_by_id[str(row["id"])], buckets)
+        accepted_bucket_counts[bucket_idx] += 1
+    requested_candidate_ids: set[str] = set()
+    for row in request_rows:
+        item_ids = row.get("item_ids", [])
+        if not isinstance(item_ids, list):
+            raise RuntimeError("partial teacher request item_ids must be a list")
+        for item_id in item_ids:
+            item_id_str = str(item_id)
+            if item_id_str in requested_candidate_ids:
+                continue
+            requested_candidate_ids.add(item_id_str)
+            candidate = candidates_by_id.get(item_id_str)
+            if candidate is not None:
+                bucket_idx = _bucket_index_for_candidate(candidate, buckets)
+                requested_bucket_counts[bucket_idx] += 1
+    processed_ids = set(resume_state["processed_ids"])
+    pending_candidates = [
+        row for row in candidates
+        if str(row["id"]) not in processed_ids
+    ]
+    bucket_queues = _teacher_bucket_queues(candidates=pending_candidates, buckets=buckets)
     estimated_batches = (len(candidates) + batch_size - 1) // batch_size
     progress(
         "teacher start",
@@ -941,9 +1094,19 @@ def run_teacher_generation(
         bucket_strategy=bucket_plan["quota_strategy"],
         target_max_output_tokens=target_max_output_tokens if reject_over_max_output_tokens else "disabled",
     )
-    called_batches = 0
-    requested_candidate_rows = 0
-    batch_idx_cursor = 0
+    called_batches = len(request_rows)
+    requested_candidate_rows = len(requested_candidate_ids)
+    batch_idx_cursor = int(resume_state["next_batch_idx"])
+    if resume_state["resumed"]:
+        progress(
+            "teacher partial-resume",
+            accepted=len(accepted),
+            rejected=len(rejected),
+            retry_rows=len(resume_state["retry_ids"]),
+            pending_rows=len(pending_candidates),
+            previous_batches=called_batches,
+            next_batch=batch_idx_cursor,
+        )
     batch_window = max_workers if refill_until_target else max(estimated_batches, 1)
 
     while any(bucket_queues):
@@ -986,8 +1149,11 @@ def run_teacher_generation(
             batch_inputs.append((batch_idx, provider, system_prompt, user_prompt, batch_rows, expected_ids))
             batch_rows_by_idx[batch_idx] = batch_rows
             for candidate in batch_rows:
+                candidate_id = str(candidate["id"])
                 bucket_idx = int(candidate.get("_teacher_bucket_idx", 0))
-                requested_bucket_counts[bucket_idx] += 1
+                if candidate_id not in requested_candidate_ids:
+                    requested_candidate_ids.add(candidate_id)
+                    requested_bucket_counts[bucket_idx] += 1
         if not batch_inputs:
             break
 
@@ -1005,7 +1171,7 @@ def run_teacher_generation(
                 max_retries=max_retries,
             )
         called_batches += len(batch_inputs)
-        requested_candidate_rows += sum(len(batch_rows_by_idx[batch_idx]) for batch_idx in results)
+        requested_candidate_rows = len(requested_candidate_ids)
 
         for batch_idx in sorted(results):
             batch_rows = batch_rows_by_idx[batch_idx]
@@ -1141,8 +1307,25 @@ def run_teacher_generation(
         ),
         "teacher_target_rows": target,
         "teacher_shortfall_rows": shortfall,
-        "teacher_exhausted_candidate_pool": bool(shortfall and requested_candidate_rows >= len(candidates)),
+        "teacher_exhausted_candidate_pool": bool(shortfall and not any(bucket_queues)),
         "teacher_refill_until_target": refill_until_target,
+        "teacher_partial_resume_enabled": resume_partial,
+        "teacher_resumed_partial": bool(resume_state["resumed"]),
+        "teacher_resumed_accepted_rows": (
+            len(resume_state["accepted_rows"])
+            if resume_state["resumed"]
+            else 0
+        ),
+        "teacher_resumed_rejected_rows": (
+            len(resume_state["rejected_rows"])
+            if resume_state["resumed"]
+            else 0
+        ),
+        "teacher_resumed_retry_rows": (
+            len(resume_state["retry_ids"])
+            if resume_state["resumed"]
+            else 0
+        ),
         "teacher_degeneration_filter_enabled": teacher_filter_enabled,
         "teacher_reject_over_max_output_tokens": reject_over_max_output_tokens,
         "teacher_target_max_output_tokens": target_max_output_tokens,

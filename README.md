@@ -195,6 +195,12 @@ By default, `make train` uses `TRAIN_RESUME=auto`. If a previous run stopped
 mid-subset, it reads `phase_state.json`, selects the latest incomplete subset,
 and resumes from the recorded phase.
 
+If the teacher phase stops after a provider-wide failure, rerunning with
+`TRAIN_RESUME=auto` also restores `teacher_artifacts.jsonl` and
+`golden_pairs.jsonl`. Completed teacher rows are preserved, while candidates
+whose latest API attempt failed are retried. Set `teacher.resume_partial=false`
+only when intentionally restarting teacher generation from an empty result.
+
 `make train-stage` uses the same resume state for each subset. Completed
 subsets are skipped, and the next incomplete subset resumes from its recorded
 phase. `TRAIN_STAGE_END_SUBSET` is exclusive.
