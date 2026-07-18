@@ -176,12 +176,13 @@ Run multi-GPU SFT:
 make sft SFT_SUBSET_IDX=0 SFT_NPROC_PER_NODE=4
 ```
 
-For text-only full SFT of a vision model, the `full` training profile enables
-DDP unused-parameter detection. This prevents a parameter outside the text
-loss path from aborting the next gradient-reduction iteration. It keeps only
-the latest optimizer-bearing checkpoint for resume and one `final` full-model
-artifact; the duplicate `full_model` artifact is disabled. LoRA keeps unused
-parameter detection disabled because only its adapter modules are trainable.
+For text-only full SFT, the generic `full` training profile retains DDP
+unused-parameter detection as a conservative fallback. The supported Qwen3.5
+and Gemma 4 model profiles override it to `false`: non-text parameters are
+frozen before DDP wrapping, while reentrant activation checkpointing is
+incompatible with unused-parameter traversal. Full runs keep only the latest
+optimizer-bearing checkpoint for resume and one `final` full-model artifact;
+the duplicate `full_model` artifact is disabled.
 
 Resume from a specific phase:
 
@@ -264,10 +265,10 @@ make train TRAIN_OVERRIDES='run.seed=7'
 Gemma 4 E2B IT is supported as a text-only DQS student/SFT model. It uses the
 model chat template with thinking disabled and freezes its vision layers. Build
 a Gemma-tokenized prepared dataset before training; do not reuse the
-Qwen-tokenized prepared corpus. Its model profile also disables DDP
-unused-parameter traversal because Gemma 4's reentrant activation checkpointing
-is incompatible with `find_unused_parameters=true`; Qwen full training keeps
-that traversal enabled.
+Qwen-tokenized prepared corpus. Like Qwen3.5, its model profile disables DDP
+unused-parameter traversal because reentrant activation checkpointing is
+incompatible with `find_unused_parameters=true` after non-text parameters are
+frozen.
 
 On an external training instance, download the published Gemma-tokenized corpus
 explicitly. This is separate from the Gemma model weights: Unsloth/vLLM fetches
