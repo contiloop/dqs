@@ -15,6 +15,7 @@ from io_utils import read_jsonl
 from progress import progress_context
 from qwen35_checkpoint_keys import (
     assert_no_bad_qwen35_checkpoint_keys,
+    assert_qwen35_checkpoint_compatible,
     normalize_qwen35_checkpoint_keys,
 )
 from runtime_logging import configure_runtime_logging, quiet_third_party_output
@@ -799,7 +800,7 @@ def _resume_checkpoint(cfg: Mapping[str, Any], output_dir: Path) -> str | bool |
     return str(raw)
 
 
-def _save_checkpoint_at_current_step(trainer: Any) -> None:
+def _save_checkpoint_at_current_step(trainer: Any) -> Path:
     if hasattr(trainer, "_save_checkpoint"):
         _call_with_supported_kwargs(
             trainer._save_checkpoint,
@@ -808,8 +809,81 @@ def _save_checkpoint_at_current_step(trainer: Any) -> None:
                 "trial": None,
             },
         )
-        return
+        return Path(str(trainer.args.output_dir)) / f"checkpoint-{int(trainer.state.global_step)}"
     raise SystemExit("Trainer does not expose checkpoint save API required for stage resume")
+
+
+def _uses_qwen35_full_checkpoint_repair(cfg: Mapping[str, Any]) -> bool:
+    return (
+        str(_get(cfg, "training.tuning_mode", "")).strip().lower() == "full"
+        and str(_get(cfg, "model.family", "")).strip().lower() == "qwen3.5"
+    )
+
+
+def _repair_full_weight_artifact(cfg: Mapping[str, Any], path: Path) -> dict[str, Any] | None:
+    if not _uses_qwen35_full_checkpoint_repair(cfg):
+        return None
+    training_cfg = _get(cfg, "training", {})
+    if not isinstance(training_cfg, Mapping):
+        training_cfg = {}
+    normalization = None
+    if bool(training_cfg.get("normalize_full_weight_checkpoint_keys", True)):
+        normalization = normalize_qwen35_checkpoint_keys(path)
+    if bool(training_cfg.get("assert_full_weight_checkpoint_keys", True)):
+        assert_no_bad_qwen35_checkpoint_keys(path)
+    return normalization
+
+
+def _resolved_resume_checkpoint(
+    resume_from_checkpoint: str | bool | None,
+    output_dir: Path,
+) -> Path | None:
+    if resume_from_checkpoint is None or resume_from_checkpoint is False:
+        return None
+    if resume_from_checkpoint is True:
+        latest = _latest_checkpoint(output_dir)
+        if latest is None:
+            raise SystemExit(f"resume requested but no checkpoint exists in {output_dir}")
+        return Path(latest)
+    return Path(str(resume_from_checkpoint))
+
+
+def _assert_qwen35_resume_checkpoint(
+    cfg: Mapping[str, Any],
+    model: Any,
+    resume_from_checkpoint: str | bool | None,
+    output_dir: Path,
+) -> dict[str, Any] | None:
+    if not _uses_qwen35_full_checkpoint_repair(cfg):
+        return None
+    checkpoint_path = _resolved_resume_checkpoint(resume_from_checkpoint, output_dir)
+    if checkpoint_path is None:
+        return None
+    # Do not auto-repair an existing run here. A later checkpoint may already
+    # contain a non-cumulative training history even if its key names can be
+    # rewritten. Require the operator to select and repair a known-good stage.
+    assert_no_bad_qwen35_checkpoint_keys(checkpoint_path)
+    return assert_qwen35_checkpoint_compatible(model.state_dict().keys(), checkpoint_path)
+
+
+def _save_repaired_checkpoint_at_current_step(
+    cfg: Mapping[str, Any],
+    trainer: Any,
+    model: Any,
+) -> tuple[Path, dict[str, Any] | None, dict[str, Any] | None]:
+    checkpoint_path = _save_checkpoint_at_current_step(trainer)
+    _distributed_barrier()
+    normalization = None
+    if _is_rank_zero():
+        normalization = _repair_full_weight_artifact(cfg, checkpoint_path)
+    _distributed_barrier()
+    compatibility = None
+    if _uses_qwen35_full_checkpoint_repair(cfg):
+        compatibility = assert_qwen35_checkpoint_compatible(
+            model.state_dict().keys(),
+            checkpoint_path,
+        )
+    return checkpoint_path, normalization, compatibility
 
 
 def _smoke_test_transformers_artifact(path: Path, *, mode: str, trust_remote_code: bool) -> dict[str, Any]:
@@ -843,21 +917,6 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
     artifacts: dict[str, Any] = {}
     smoke_tests: list[dict[str, Any]] = []
     trust_remote_code = bool(_get(cfg, "model.trust_remote_code", False))
-    model_family = str(_get(cfg, "model.family", "")).strip().lower()
-    normalize_full_keys = bool(training_cfg.get("normalize_full_weight_checkpoint_keys", True))
-    assert_full_keys = bool(training_cfg.get("assert_full_weight_checkpoint_keys", True))
-
-    def _repair_full_artifact(path: Path) -> dict[str, Any] | None:
-        # This repair exists solely for a Qwen3.5 save-key regression.  Avoid
-        # re-reading every Gemma safetensor after a successful full-model save.
-        if tuning_mode != "full" or model_family != "qwen3.5":
-            return None
-        normalization = None
-        if normalize_full_keys:
-            normalization = normalize_qwen35_checkpoint_keys(path)
-        if assert_full_keys:
-            assert_no_bad_qwen35_checkpoint_keys(path)
-        return normalization
 
     if bool(training_cfg.get("save_final_model", True)):
         final_dir = output_dir / "final"
@@ -866,7 +925,7 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
             model.save_pretrained(str(final_dir))
             tokenizer.save_pretrained(str(final_dir))
         artifacts["final_model_dir"] = str(final_dir)
-        normalization = _repair_full_artifact(final_dir)
+        normalization = _repair_full_weight_artifact(cfg, final_dir)
         if normalization is not None:
             artifacts["final_model_key_normalization"] = normalization
 
@@ -899,7 +958,7 @@ def _save_model_artifacts(cfg: Mapping[str, Any], model: Any, tokenizer: Any, ou
             model.save_pretrained(str(full_dir), safe_serialization=True)
             tokenizer.save_pretrained(str(full_dir))
         artifacts["full_model_dir"] = str(full_dir)
-        normalization = _repair_full_artifact(full_dir)
+        normalization = _repair_full_weight_artifact(cfg, full_dir)
         if normalization is not None:
             artifacts["full_model_key_normalization"] = normalization
     if smoke_tests:
@@ -1038,6 +1097,22 @@ def run_sft_training(
     set_seed(int(_get(cfg, "run.seed", 42) or 42))
     train_dataset = PromptCompletionDataset(tokenized_rows)
     resume_from_checkpoint = _resume_checkpoint(cfg, output_dir_obj)
+    resume_key_compatibility = _assert_qwen35_resume_checkpoint(
+        cfg,
+        model,
+        resume_from_checkpoint,
+        output_dir_obj,
+    )
+    if resume_key_compatibility is not None and _is_rank_zero():
+        print(
+            "[dqs] sft resume-key-check "
+            f"checkpoint={resume_key_compatibility['model_dir']} "
+            f"matched={resume_key_compatibility['matched_key_count']} "
+            f"runtime={resume_key_compatibility['runtime_key_count']} "
+            f"checkpoint_keys={resume_key_compatibility['checkpoint_key_count']} "
+            f"runtime_coverage={resume_key_compatibility['runtime_coverage']:.6f}",
+            flush=True,
+        )
     stage_plan = _resolve_stage_sft_plan(
         cfg=cfg,
         output_dir=output_dir_obj,
@@ -1095,12 +1170,28 @@ def run_sft_training(
     )
     if stage_plan and _is_rank_zero():
         _write_sft_stage_state(Path(stage_plan["path"]), stage_plan)
+    checkpoint_key_normalization = None
+    checkpoint_key_compatibility = None
     try:
         with _rank0_progress_context("sft train", subset=f"subset_{subset_idx:03d}", rows=len(tokenized_rows), resume=resume_from_checkpoint):
             train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         trainer.save_state()
         if force_save_checkpoint or stage_plan:
-            _save_checkpoint_at_current_step(trainer)
+            (
+                checkpoint_path,
+                checkpoint_key_normalization,
+                checkpoint_key_compatibility,
+            ) = _save_repaired_checkpoint_at_current_step(cfg, trainer, model)
+            if checkpoint_key_compatibility is not None and _is_rank_zero():
+                print(
+                    "[dqs] sft checkpoint-key-check "
+                    f"checkpoint={checkpoint_path} "
+                    f"matched={checkpoint_key_compatibility['matched_key_count']} "
+                    f"runtime={checkpoint_key_compatibility['runtime_key_count']} "
+                    f"checkpoint_keys={checkpoint_key_compatibility['checkpoint_key_count']} "
+                    f"runtime_coverage={checkpoint_key_compatibility['runtime_coverage']:.6f}",
+                    flush=True,
+                )
     except BaseException as exc:
         if stage_plan and _is_rank_zero():
             failed_plan = dict(stage_plan)
@@ -1142,6 +1233,9 @@ def run_sft_training(
         {
             "dry_run": False,
             "resume_from_checkpoint": resume_from_checkpoint,
+            "resume_key_compatibility": resume_key_compatibility,
+            "checkpoint_key_normalization": checkpoint_key_normalization,
+            "checkpoint_key_compatibility": checkpoint_key_compatibility,
             "global_step": int(getattr(trainer.state, "global_step", 0)),
             "train_loss": train_result.metrics.get("train_loss") if hasattr(train_result, "metrics") else None,
             "artifacts": artifacts,

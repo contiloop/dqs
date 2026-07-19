@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,76 @@ def _model_safetensor_files(model_dir: Path) -> list[Path]:
             continue
         files.append(path)
     return files
+
+
+def qwen35_checkpoint_keys(model_dir: str | Path) -> set[str]:
+    """Return all full-model safetensor keys stored in ``model_dir``."""
+    from safetensors import safe_open
+
+    model_dir = Path(model_dir)
+    files = _model_safetensor_files(model_dir)
+    if not files:
+        raise SystemExit(f"no model safetensors files found in {model_dir}")
+
+    keys: set[str] = set()
+    for path in files:
+        with safe_open(str(path), framework="pt", device="cpu") as handle:
+            for key in handle.keys():
+                if key in keys:
+                    raise SystemExit(f"duplicate tensor key across checkpoint shards in {model_dir}: {key}")
+                keys.add(key)
+    return keys
+
+
+def qwen35_checkpoint_compatibility(
+    runtime_keys: Iterable[str],
+    model_dir: str | Path,
+) -> dict[str, Any]:
+    """Compare a loaded Qwen3.5 model namespace with an on-disk checkpoint."""
+    runtime = {str(key) for key in runtime_keys}
+    checkpoint = qwen35_checkpoint_keys(model_dir)
+    matched = runtime & checkpoint
+    runtime_only = runtime - checkpoint
+    checkpoint_only = checkpoint - runtime
+    runtime_coverage = len(matched) / len(runtime) if runtime else 0.0
+    checkpoint_coverage = len(matched) / len(checkpoint) if checkpoint else 0.0
+    return {
+        "model_dir": str(model_dir),
+        "runtime_key_count": len(runtime),
+        "checkpoint_key_count": len(checkpoint),
+        "matched_key_count": len(matched),
+        "runtime_only_count": len(runtime_only),
+        "checkpoint_only_count": len(checkpoint_only),
+        "runtime_coverage": runtime_coverage,
+        "checkpoint_coverage": checkpoint_coverage,
+        "runtime_only_examples": sorted(runtime_only)[:20],
+        "checkpoint_only_examples": sorted(checkpoint_only)[:20],
+    }
+
+
+def assert_qwen35_checkpoint_compatible(
+    runtime_keys: Iterable[str],
+    model_dir: str | Path,
+    *,
+    min_runtime_coverage: float = 0.99,
+) -> dict[str, Any]:
+    """Fail before resume when a Qwen3.5 checkpoint cannot load its full weights."""
+    summary = qwen35_checkpoint_compatibility(runtime_keys, model_dir)
+    if (
+        summary["checkpoint_only_count"] > 0
+        or summary["runtime_coverage"] < min_runtime_coverage
+    ):
+        raise SystemExit(
+            "incompatible Qwen3.5 resume checkpoint; refusing partial/zero-weight load: "
+            f"checkpoint={model_dir} "
+            f"matched={summary['matched_key_count']} "
+            f"runtime={summary['runtime_key_count']} "
+            f"checkpoint_keys={summary['checkpoint_key_count']} "
+            f"runtime_coverage={summary['runtime_coverage']:.6f} "
+            f"checkpoint_only={summary['checkpoint_only_count']} "
+            f"checkpoint_only_examples={summary['checkpoint_only_examples']}"
+        )
+    return summary
 
 
 def _replace_file(path: Path, tmp_path: Path, *, backup: bool) -> str | None:
