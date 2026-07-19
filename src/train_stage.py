@@ -209,14 +209,14 @@ def _eval_cmd(
 def _should_eval_after_subset(
     *,
     args: argparse.Namespace,
-    stage_start: int,
+    run_start: int,
     stage_end: int,
     subset_idx: int,
 ) -> bool:
     every_n = int(args.eval_every_n_subsets or 0)
     if every_n <= 0:
         return False
-    offset = subset_idx - stage_start + 1
+    offset = subset_idx - run_start
     if offset % every_n == 0:
         return True
     return bool(args.eval_on_final_subset and subset_idx == stage_end - 1)
@@ -237,7 +237,8 @@ def _metric_step_from_subset_summary(summary: Mapping[str, Any]) -> int | None:
 
 def run_stage(args: argparse.Namespace) -> dict[str, Any]:
     cfg = compose_config(args.config, overrides=args.override)
-    start_subset = int(args.subset_idx if args.subset_idx is not None else _get(cfg, "run.subset_start", 0))
+    run_start_subset = int(_get(cfg, "run.subset_start", 0) or 0)
+    start_subset = int(args.subset_idx if args.subset_idx is not None else run_start_subset)
     subset_size = int(args.subset_size if args.subset_size is not None else _get(cfg, "data.subset_size", 100000))
     stage_end = _resolve_stage_end(
         cfg=cfg,
@@ -264,6 +265,7 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
         "dry_run": bool(args.dry_run),
         "force": bool(args.force),
         "eval_every_n_subsets": int(args.eval_every_n_subsets or 0),
+        "eval_anchor_subset": run_start_subset,
         "eval_on_final_subset": bool(args.eval_on_final_subset),
         "eval_profile": args.eval_profile,
         "sft_scheduler_total_steps": sft_scheduler_total_steps,
@@ -349,7 +351,7 @@ def run_stage(args: argparse.Namespace) -> dict[str, Any]:
 
         if _should_eval_after_subset(
             args=args,
-            stage_start=start_subset,
+            run_start=run_start_subset,
             stage_end=stage_end,
             subset_idx=subset_idx,
         ):
