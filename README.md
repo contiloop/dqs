@@ -158,7 +158,8 @@ count is recorded as `structurally_frozen_parameter_count`, and the exact names
 are written to `audit/structurally_frozen_parameters.json`.
 
 By default, `make train-stage` runs validation eval after every subset. To use
-a wider cadence:
+a wider cadence anchored to `run.subset_start` (for a run starting at subset
+000, `5` evaluates subsets 000, 005, 010, ...):
 
 ```sh
 make train-stage EVAL_EVERY_N_SUBSETS=5
