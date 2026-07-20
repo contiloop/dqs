@@ -122,7 +122,7 @@ SMOKE_SFT_DRY_RUN ?= 0
 SMOKE_SFT_OVERRIDES ?= run.id=smoke_max_context logging.wandb.enabled=false training.gradient_accumulation_steps=1 training.max_steps=2 training.save_strategy=no training.save_final_model=false training.save_full_model=false training.save_merged_model=false training.merge_smoke_test_required=false
 SMOKE_CYCLE_DRY_RUN ?= 0
 SMOKE_CYCLE_EVAL_DRY_RUN ?= 0
-SMOKE_CYCLE_OVERRIDES ?= run.id=smoke_cycle logging.wandb.enabled=false data.teacher_target_per_subset=2 teacher.candidate_multiplier=2 training.gradient_accumulation_steps=1 training.save_strategy=no training.save_merged_model=false training.merge_smoke_test_required=false
+SMOKE_CYCLE_OVERRIDES ?= run.id=smoke_cycle logging.wandb.enabled=false data.selection_ratio=0.5 teacher.candidate_multiplier=2 training.gradient_accumulation_steps=1 training.save_strategy=no training.save_merged_model=false training.merge_smoke_test_required=false
 SMOKE_CYCLE_EVAL_OVERRIDES ?=
 TORCH_INDEX_URL ?= https://download.pytorch.org/whl/cu128
 PIN_TORCH_VERSION ?= 2.10.0

@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from config_loader import compose_config
 from progress import progress, progress_context
 from runtime_logging import configure_runtime_logging
+from selection_target import selection_target_per_subset
 from train import (
     TRAIN_PHASES,
     _get,
@@ -131,12 +132,7 @@ def _planned_sft_rows_per_subset(cfg: Mapping[str, Any]) -> int:
     configured = _get(cfg, "training.stage_planned_rows_per_subset")
     if configured is not None:
         return max(1, int(configured))
-    teacher_target = int(_get(cfg, "data.teacher_target_per_subset", 0) or 0)
-    if teacher_target > 0:
-        return teacher_target
-    subset_size = int(_get(cfg, "data.subset_size", 100000) or 100000)
-    selection_ratio = float(_get(cfg, "data.selection_ratio", 0.01) or 0.01)
-    return max(1, math.ceil(subset_size * selection_ratio))
+    return selection_target_per_subset(cfg)
 
 
 def _stage_scheduler_total_steps(
@@ -237,6 +233,8 @@ def _metric_step_from_subset_summary(summary: Mapping[str, Any]) -> int | None:
 
 def run_stage(args: argparse.Namespace) -> dict[str, Any]:
     cfg = compose_config(args.config, overrides=args.override)
+    if args.subset_size is not None:
+        cfg.setdefault("data", {})["subset_size"] = int(args.subset_size)
     run_start_subset = int(_get(cfg, "run.subset_start", 0) or 0)
     start_subset = int(args.subset_idx if args.subset_idx is not None else run_start_subset)
     subset_size = int(args.subset_size if args.subset_size is not None else _get(cfg, "data.subset_size", 100000))

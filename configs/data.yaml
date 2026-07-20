@@ -30,8 +30,8 @@ data:
   length_counter: tokenizer
   split_long_sources: false
   subset_size: 100000
+  # Teacher/SFT target rows per subset = ceil(subset_size * selection_ratio).
   selection_ratio: 0.01
-  teacher_target_per_subset: 1000
   # low/high/random all run student inference, student filtering, and QE first.
   # random then samples from the clean QE-scored candidate pool with a seed-stable hash.
   qe_selection_order: low  # low, high, random

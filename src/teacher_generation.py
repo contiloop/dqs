@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, ValidationError
 from degeneration_filter import classify_student_output
 from io_utils import read_jsonl, write_jsonl
 from progress import progress, progress_context
+from selection_target import selection_target_per_subset
 from text_tokenization import text_token_ids
 
 
@@ -1018,7 +1019,7 @@ def run_teacher_generation(
     teacher_cfg = _get(cfg, "teacher", {})
     if not isinstance(teacher_cfg, Mapping):
         raise SystemExit("teacher config must be a mapping")
-    target = int(_get(cfg, "data.teacher_target_per_subset", 1000) or 1000)
+    target = selection_target_per_subset(cfg)
     batch_size = max(1, int(teacher_cfg.get("batch_size", 4) or 4))
     max_workers = max(1, int(teacher_cfg.get("max_workers", 20) or 20))
     max_retries = max(1, int(teacher_cfg.get("max_retries_per_row", 3) or 3))

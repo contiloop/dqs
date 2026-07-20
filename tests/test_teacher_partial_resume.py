@@ -134,7 +134,8 @@ class TeacherPartialResumeTest(TestCase):
                 "run": {"seed": 42},
                 "logging": {"save_all_step_artifacts": False},
                 "data": {
-                    "teacher_target_per_subset": 3,
+                    "subset_size": 5,
+                    "selection_ratio": 0.6,
                     "max_output_tokens": 100,
                     "length_bucket_selection": {"enabled": False},
                     "degeneration_filter": {"enabled": False},

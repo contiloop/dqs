@@ -8,7 +8,8 @@ training:
   learning_rate: 0.00002
   warmup_ratio: 0.1
   scheduler: cosine
-  stage_planned_rows_per_subset: ${data.teacher_target_per_subset}
+  # null derives planned rows as ceil(data.subset_size * data.selection_ratio).
+  stage_planned_rows_per_subset: null
   optimizer: adamw_torch
   max_grad_norm: 5.0
   weight_decay: 0.0

@@ -22,6 +22,7 @@ from progress import progress, progress_context
 from prompting import load_student_templates, render_student_prompt
 from qe_score import comet_scores
 from runtime_logging import configure_runtime_logging
+from selection_target import selection_target_per_subset
 from sft_dataset import write_sft_dataset
 from sft_train import run_sft_training
 from teacher_generation import run_teacher_generation
@@ -1947,7 +1948,7 @@ def _select_for_teacher(
     if not scored_rows:
         return []
 
-    candidate_count = _teacher_candidate_count(cfg, pool_size=len(filter_rows))
+    candidate_count = _teacher_candidate_count(cfg)
     qe_order = _qe_selection_order(cfg)
     scored_rows.sort(
         key=lambda row: _teacher_candidate_sort_key(
@@ -1981,7 +1982,7 @@ def _select_raw_random_for_teacher(
 ) -> list[dict[str, Any]]:
     if not input_rows:
         return []
-    candidate_count = _teacher_candidate_count(cfg, pool_size=len(input_rows))
+    candidate_count = _teacher_candidate_count(cfg)
     candidate_rows = [dict(row) for row in input_rows]
     candidate_rows.sort(
         key=lambda row: _teacher_candidate_sort_key(
@@ -2012,11 +2013,8 @@ def _select_raw_random_for_teacher(
     return selected
 
 
-def _teacher_candidate_count(cfg: Mapping[str, Any], *, pool_size: int) -> int:
-    target = int(_get(cfg, "data.teacher_target_per_subset", 0) or 0)
-    if target <= 0:
-        ratio = float(_get(cfg, "data.selection_ratio", 0.01) or 0.01)
-        target = max(1, int(pool_size * ratio + 0.999999))
+def _teacher_candidate_count(cfg: Mapping[str, Any]) -> int:
+    target = selection_target_per_subset(cfg)
     multiplier = float(_get(cfg, "teacher.candidate_multiplier", 1.0) or 1.0)
     return max(target, int(target * max(1.0, multiplier) + 0.999999))
 
@@ -2274,6 +2272,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     cfg = compose_config(args.config, overrides=args.override)
+    if args.subset_size is not None:
+        cfg.setdefault("data", {})["subset_size"] = int(args.subset_size)
     default_subset_idx = int(args.subset_idx if args.subset_idx is not None else _get(cfg, "run.subset_start", 0))
     start_from_phase = args.start_from_phase
     if args.resume == "auto" and start_from_phase is None and not args.force:

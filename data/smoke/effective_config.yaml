@@ -47,7 +47,6 @@ data:
   split_long_sources: false
   subset_size: 100000
   selection_ratio: 0.01
-  teacher_target_per_subset: 1000
   length_bucket_selection:
     enabled: true
     quota_strategy: proportional
@@ -308,7 +307,7 @@ training:
   learning_rate: 2.0e-05
   warmup_ratio: 0.1
   scheduler: cosine
-  stage_planned_rows_per_subset: 1000
+  stage_planned_rows_per_subset: null
   optimizer: adamw_torch
   max_grad_norm: 5.0
   weight_decay: 0.0
