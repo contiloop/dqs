@@ -426,13 +426,20 @@ Key eval files:
 eval_summary.json
 eval_records.jsonl
 eval_outputs.jsonl
+eval_effective_config.yaml
+training_effective_config.yaml
+config_provenance.json
 ```
 
 W&B logs compact curves only: SFT loss/LR from Trainer plus subset summary
 counts and eval metric means. `eval_records.jsonl` keeps the row-level canonical
 eval result, including source/reference/translation, prompt template id, filter
-label, and sentence-level metric scores. Full runtime config is in
-`effective_config.yaml`, and generation details are in `eval_outputs.jsonl`. Set
+label, and sentence-level metric scores. Evaluation runtime settings are in
+`eval_effective_config.yaml`; the copied training/data-selection settings are in
+`training_effective_config.yaml`. `config_provenance.json` identifies which
+snapshot is authoritative. The legacy `effective_config.yaml` remains for
+compatibility but is evaluation-scoped and starts with a warning. Generation
+details are in `eval_outputs.jsonl`. Set
 `logging.save_all_step_artifacts=true` to also keep split eval request,
 translation, filter, and score JSONL files.
 Subset W&B curves are kept compact: filtered rows, rows blocked from teacher

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 from collections import Counter
+import hashlib
 import json
 import shutil
 import subprocess
@@ -32,6 +33,128 @@ def _get(cfg: Mapping[str, Any], dotted: str, default: Any = None) -> Any:
             return default
         cursor = cursor[part]
     return cursor
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _training_config_candidates(
+    cfg: Mapping[str, Any],
+    *,
+    model_path: str | Path | None,
+    output_dir: Path,
+) -> list[Path]:
+    candidates: list[Path] = []
+    configured = _get(cfg, "paths.config_snapshot_path")
+    if configured:
+        candidates.append(Path(str(configured)).expanduser())
+
+    if model_path:
+        local_model_path = Path(str(model_path)).expanduser()
+        if local_model_path.exists():
+            current = local_model_path if local_model_path.is_dir() else local_model_path.parent
+            for _ in range(8):
+                candidates.append(current / "effective_config.yaml")
+                if current.parent == current:
+                    break
+                current = current.parent
+
+    output_dir_resolved = output_dir.resolve()
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.parent == output_dir_resolved or resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(candidate)
+    return unique
+
+
+def _save_eval_config_provenance(
+    *,
+    cfg: dict[str, Any],
+    output_dir: Path,
+    model_path: str | Path | None,
+) -> dict[str, Any]:
+    """Save eval and training configs without conflating their provenance."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    eval_config_path = output_dir / "eval_effective_config.yaml"
+    legacy_config_path = output_dir / "effective_config.yaml"
+    training_copy_path = output_dir / "training_effective_config.yaml"
+    manifest_path = output_dir / "config_provenance.json"
+
+    training_source = next(
+        (
+            candidate
+            for candidate in _training_config_candidates(
+                cfg,
+                model_path=model_path,
+                output_dir=output_dir,
+            )
+            if candidate.is_file()
+        ),
+        None,
+    )
+
+    save_effective_config(eval_config_path, cfg)
+    warning = (
+        "# WARNING: evaluation-scope config only; do not use data-selection fields "
+        "as training provenance.\n"
+        "# See config_provenance.json; a training config is copied separately when available.\n"
+    )
+    legacy_config_path.write_text(
+        warning + eval_config_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    training_entry: dict[str, Any] = {
+        "authoritative_for_training": training_source is not None,
+        "available": training_source is not None,
+        "source_path": str(training_source) if training_source is not None else None,
+        "snapshot_path": None,
+        "sha256": None,
+    }
+    if training_source is not None:
+        shutil.copy2(training_source, training_copy_path)
+        training_entry.update(
+            {
+                "snapshot_path": training_copy_path.name,
+                "sha256": _sha256_file(training_copy_path),
+            }
+        )
+    elif training_copy_path.exists():
+        training_copy_path.unlink()
+
+    manifest = {
+        "schema_version": 1,
+        "artifact_scope": "evaluation",
+        "guidance": (
+            "Use eval_effective_config.yaml for evaluation settings and "
+            "training_effective_config.yaml for training/data-selection claims."
+        ),
+        "eval_config": {
+            "authoritative_for_training": False,
+            "snapshot_path": eval_config_path.name,
+            "sha256": _sha256_file(eval_config_path),
+        },
+        "legacy_config": {
+            "scope": "evaluation",
+            "snapshot_path": legacy_config_path.name,
+            "deprecated_for_training_provenance": True,
+        },
+        "training_config": training_entry,
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
 
 
 def _deep_merge_mapping(base: Mapping[str, Any], overrides: Mapping[str, Any]) -> dict[str, Any]:
@@ -751,7 +874,6 @@ def main() -> None:
     _filter_metric_config(cfg, args.metrics)
     output_dir = Path(args.output_dir or str(_get(cfg, "eval.output_dir")))
     output_dir.mkdir(parents=True, exist_ok=True)
-    save_effective_config(output_dir / "effective_config.yaml", cfg)
 
     limit = args.limit if args.limit is not None else _get(cfg, "eval.limit")
     limit_int = None if limit is None else int(limit)
@@ -762,6 +884,11 @@ def main() -> None:
         cfg,
         model_path=args.model_path,
         require_trained_artifact=not args.dry_run,
+    )
+    config_provenance = _save_eval_config_provenance(
+        cfg=cfg,
+        output_dir=output_dir,
+        model_path=model_spec["model_path"],
     )
     progress(
         "eval model",
@@ -822,6 +949,7 @@ def main() -> None:
         "filter_label_counts": dict(sorted(label_counts.items())),
         "usage": _usage_summary(translations),
         "metrics": metric_summary,
+        "config_provenance": config_provenance,
         "dry_run": bool(args.dry_run),
     }
     (output_dir / "eval_summary.json").write_text(
